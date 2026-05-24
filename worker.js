@@ -1,5 +1,5 @@
 import { FastAPI, APIRouter } from './lib/fastapi-edge.js';
-import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth } from './lib/js-doc-store.js';
+import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth, Table } from './lib/js-doc-store.js';
 import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore, MemoryStorageAdapter, CloudflareKVAdapter } from './lib/js-vector-store.js';
 
 // 1. Inicialización de la Aplicación en el Edge con CORS
@@ -118,9 +118,11 @@ const preloadVectorCol = async (store, col, env) => {
 
 const ensureAuthPreloaded = async () => {
     if (db && db._adapter && typeof db._adapter.preload === 'function') {
+        if (db._collections.has('_users')) db.collection('_users')._loaded = false;
+        if (db._collections.has('_sessions')) db.collection('_sessions')._loaded = false;
         await db._adapter.preload([
-            'users.docs.json', 'users.meta.json',
-            'sessions.docs.json', 'sessions.meta.json'
+            '_users.docs.json', '_users.meta.json',
+            '_sessions.docs.json', '_sessions.meta.json'
         ]);
     }
 };
@@ -510,10 +512,266 @@ vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
     };
 });
 
+// ----------------------------------------------------------------------------
+// ROUTER DE CUSTOM POST TYPES (/cpts)
+// ----------------------------------------------------------------------------
+const cptRouter = new APIRouter({
+    prefix: '/cpts',
+    tags: ['CPTs'],
+    dependencies: { user: getEdgeUser }
+});
+
+const ensureCptsPreloaded = async (env) => {
+    ensureDbAndAuth(env);
+    if (db && db._adapter && typeof db._adapter.preloadAll === 'function') {
+        for (const col of db._collections.values()) {
+            col._loaded = false;
+        }
+        await db._adapter.preloadAll();
+    }
+};
+
+cptRouter.get('/schemas', async (request, env, ctx, deps) => {
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemas = schemaCol.find({}).toArray();
+        return {
+            mensaje: "Listado de CPTs obtenido exitosamente",
+            cpts: schemas
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al listar CPTs", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+cptRouter.post('/schemas', async (request, env, ctx, deps) => {
+    const { name, columns } = request.body;
+    if (!name || !Array.isArray(columns)) {
+        return new Response(JSON.stringify({ detail: "Campos 'name' y 'columns' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!cleanName) {
+        return new Response(JSON.stringify({ detail: "Nombre de CPT inválido" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        
+        const existing = schemaCol.findById(cleanName);
+        if (existing) {
+            schemaCol.removeById(cleanName);
+        }
+        
+        schemaCol.insert({
+            _id: cleanName,
+            name: cleanName,
+            columns
+        });
+        
+        try {
+            schemaCol.flush();
+        } catch (flushErr) {
+            return new Response(JSON.stringify({ detail: "Error al persistir el esquema en disco", mensaje: flushErr.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        return {
+            mensaje: `CPT '${cleanName}' registrado y guardado con éxito`,
+            cpt: {
+                name: cleanName,
+                columns
+            }
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al crear el CPT", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+}, {
+    body: {
+        name: { type: 'string', required: true },
+        columns: { type: 'array', required: true }
+    }
+});
+
+cptRouter.get('/:collection', async (request, env, ctx, deps) => {
+    const { collection } = request.params;
+    const urlObj = new URL(request.url);
+    const expand = urlObj.searchParams.get('expand') === 'true';
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(collection);
+        if (!schemaDoc) {
+            return new Response(JSON.stringify({ detail: `El CPT '${collection}' no está registrado.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const table = new Table(db, collection, { columns: schemaDoc.columns });
+        const col = db.collection(collection);
+        let docs = col.find({}).toArray();
+
+        if (expand) {
+            docs = docs.map(doc => table.expandRelations(doc));
+        }
+
+        return {
+            mensaje: `Documentos obtenidos del CPT '${collection}'`,
+            conteo: docs.length,
+            documentos: docs,
+            columns: schemaDoc.columns
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al leer documentos", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+cptRouter.post('/:collection', async (request, env, ctx, deps) => {
+    const { collection } = request.params;
+    const docData = request.body;
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(collection);
+        if (!schemaDoc) {
+            return new Response(JSON.stringify({ detail: `El CPT '${collection}' no está registrado.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        // NOTE: Uso consciente de métodos privados de js-doc-store Table:
+        // _applyDefaults, _validate y _col son APIs internas; se usan aquí para
+        // acceder al pipeline de validación sin duplicar lógica.
+        const table = new Table(db, collection, { columns: schemaDoc.columns });
+        
+        // 1. Apply defaults
+        const defaultedDoc = table._applyDefaults(docData);
+        
+        // 2. Validate columns (throws on invalid data → caught as 400)
+        table._validate(defaultedDoc);
+        
+        // 3. Insert
+        const inserted = table._col.insert(defaultedDoc);
+        
+        // 4. Persist (disk/KV errors → 500)
+        try {
+            table._col.flush();
+        } catch (flushErr) {
+            return new Response(JSON.stringify({ detail: "Error al persistir el documento en disco", mensaje: flushErr.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        return {
+            mensaje: "Documento insertado con éxito",
+            documento: inserted
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error de validación o inserción", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+cptRouter.put('/:collection/:id', async (request, env, ctx, deps) => {
+    const { collection, id } = request.params;
+    const docData = request.body;
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(collection);
+        if (!schemaDoc) {
+            return new Response(JSON.stringify({ detail: `El CPT '${collection}' no está registrado.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const col = db.collection(collection);
+        const existing = col.findById(id);
+        if (!existing) {
+            return new Response(JSON.stringify({ detail: "Documento no encontrado" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const table = new Table(db, collection, { columns: schemaDoc.columns });
+
+        const merged = { ...existing, ...docData, _id: existing._id };
+        const defaultedDoc = table._applyDefaults(merged);
+        table._validate(defaultedDoc);
+
+        col.update({ _id: id }, { $set: defaultedDoc });
+        
+        try {
+            col.flush();
+        } catch (flushErr) {
+            return new Response(JSON.stringify({ detail: "Error al persistir la actualización en disco", mensaje: flushErr.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const updated = col.findById(id);
+        return {
+            mensaje: "Documento actualizado con éxito",
+            documento: updated
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error de validación o actualización", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+cptRouter.delete('/schemas/:name', async (request, env, ctx, deps) => {
+    const { name } = request.params;
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(name);
+        if (!schemaDoc) {
+            return new Response(JSON.stringify({ detail: `El CPT '${name}' no está registrado.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        schemaCol.removeById(name);
+        schemaCol.flush();
+
+        const col = db.collection(name);
+        const docs = col.find({}).toArray();
+        for (const doc of docs) {
+            col.removeById(doc._id);
+        }
+        col.flush();
+
+        return {
+            mensaje: `CPT '${name}' y todos sus documentos eliminados con éxito`
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al eliminar el CPT", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+cptRouter.delete('/:collection/:id', async (request, env, ctx, deps) => {
+    const { collection, id } = request.params;
+
+    try {
+        await ensureCptsPreloaded(env);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(collection);
+        if (!schemaDoc) {
+            return new Response(JSON.stringify({ detail: `El CPT '${collection}' no está registrado.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const col = db.collection(collection);
+        const deleted = col.removeById(id);
+        col.flush();
+
+        if (!deleted) {
+            return new Response(JSON.stringify({ detail: "Documento no encontrado" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        return {
+            mensaje: "Documento eliminado con éxito",
+            id
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al eliminar el documento", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
 // Incluir Routers en la App
 app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
+app.includeRouter(cptRouter);
 
 // ----------------------------------------------------------------------------
 // ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)
