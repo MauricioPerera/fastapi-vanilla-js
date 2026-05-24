@@ -366,6 +366,108 @@ vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
     }
 });
 
+vectorRouter.post('/upsert-text', async (request, env, ctx, deps) => {
+    const { collection, id, text, metadata } = request.body;
+    const { store, quantization } = getEdgeStore(request);
+    
+    if (!collection || !id || typeof text !== 'string') {
+        return new Response(JSON.stringify({ detail: "Campos 'collection', 'id' y 'text' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (!env || !env.AI) {
+        return new Response(JSON.stringify({ detail: "Workers AI binding ('AI') no configurado en este ambiente." }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    let vector;
+    try {
+        const aiRes = await env.AI.run('@cf/google/embeddinggemma-300m', { text: [text] });
+        vector = aiRes.data[0];
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al generar embedding en Workers AI", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (!Array.isArray(vector) || vector.length !== store.dim) {
+        return new Response(JSON.stringify({ detail: `El modelo retornó un vector con dimensión incorrecta. Se esperaba ${store.dim}.` }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    await preloadVectorCol(store, collection, env);
+    
+    const meta = { ...(metadata || {}), text };
+    store.set(collection, id, vector, meta);
+    await store.flush();
+    
+    return {
+        mensaje: "Vector de texto indexado con éxito con EmbeddingGemma-300M",
+        collection,
+        id,
+        quantization
+    };
+}, {
+    body: {
+        collection: { type: 'string', required: true },
+        id: { type: 'string', required: true },
+        text: { type: 'string', required: true },
+        metadata: { type: 'object', required: false },
+        quantization: { type: 'string', required: false }
+    }
+});
+
+vectorRouter.post('/search-text', async (request, env, ctx, deps) => {
+    const { collection, text, limit, alpha, metric, quantization } = request.body;
+    const { store } = getEdgeStore(request);
+    
+    if (!collection || typeof text !== 'string') {
+        return new Response(JSON.stringify({ detail: "Campos 'collection' y 'text' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (!env || !env.AI) {
+        return new Response(JSON.stringify({ detail: "Workers AI binding ('AI') no configurado en este ambiente." }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    let vector;
+    try {
+        const aiRes = await env.AI.run('@cf/google/embeddinggemma-300m', { text: [text] });
+        vector = aiRes.data[0];
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al generar embedding en Workers AI", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (!Array.isArray(vector) || vector.length !== store.dim) {
+        return new Response(JSON.stringify({ detail: `El modelo retornó un vector con dimensión incorrecta. Se esperaba ${store.dim}.` }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const limitVal = limit || 5;
+    const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
+    const metricVal = metric || 'cosine';
+
+    await preloadVectorCol(store, collection, env);
+
+    let results;
+    if (alphaVal === 1.0) {
+        results = store.search(collection, vector, limitVal, 0, metricVal);
+    } else {
+        results = store.hybrid.search(collection, vector, text, limitVal, {
+            vectorWeight: alphaVal,
+            textWeight: 1 - alphaVal,
+            metric: metricVal
+        });
+    }
+
+    return {
+        mensaje: "Búsqueda de texto completada usando EmbeddingGemma-300M",
+        collection,
+        alpha: alphaVal,
+        resultados: results
+    };
+}, {
+    body: {
+        collection: { type: 'string', required: true },
+        text: { type: 'string', required: true },
+        limit: { type: 'number', required: false },
+        alpha: { type: 'number', required: false },
+        metric: { type: 'string', required: false },
+        quantization: { type: 'string', required: false }
+    }
+});
+
 vectorRouter.post('/build-index', async (request, env, ctx, deps) => {
     const { collection } = request.body;
     const { quantization } = getEdgeStore(request);

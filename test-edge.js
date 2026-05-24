@@ -365,5 +365,96 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         assert.strictEqual(searchBody.resultados.length, 1);
         assert.strictEqual(searchBody.resultados[0].id, "edoc-enc-1");
     });
+
+    // Test 16: Upsert-text con 503 si env.AI no está configurado
+    await t.test('POST /vectors/upsert-text - Falla con 503 si env.AI no está configurado en el Edge', async () => {
+        const req = new Request('http://localhost/vectors/upsert-text', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-ai-col",
+                id: "doc-ai-1",
+                text: "este texto no se indexará porque no hay AI binding"
+            })
+        });
+        const res = await worker.fetch(req, env, ctx); // env no tiene AI
+        assert.strictEqual(res.status, 503);
+        const body = await res.json();
+        assert.ok(body.detail.includes("Workers AI binding ('AI') no configurado"));
+    });
+
+    // Test 17: Upsert-text exitoso con Mock de Gemma-300M
+    await t.test('POST /vectors/upsert-text - Genera embedding Gemma-300M e indexa texto en el Edge', async () => {
+        const aiEnv = {
+            ...env,
+            AI: {
+                run: async (model, input) => {
+                    assert.strictEqual(model, '@cf/google/embeddinggemma-300m');
+                    assert.deepStrictEqual(input, { text: ["Hola Mundo desde Cloudflare Workers AI"] });
+                    return { data: [new Array(768).fill(0.25)] };
+                }
+            }
+        };
+
+        const req = new Request('http://localhost/vectors/upsert-text', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-ai-col",
+                id: "doc-ai-1",
+                text: "Hola Mundo desde Cloudflare Workers AI",
+                metadata: { categoria: "test" }
+            })
+        });
+        const res = await worker.fetch(req, aiEnv, ctx);
+        assert.strictEqual(res.status, 200);
+        const body = await res.json();
+        assert.strictEqual(body.mensaje, "Vector de texto indexado con éxito con EmbeddingGemma-300M");
+        assert.strictEqual(body.collection, "edge-ai-col");
+        assert.strictEqual(body.id, "doc-ai-1");
+    });
+
+    // Test 18: Search-text exitoso con Mock de Gemma-300M
+    await t.test('POST /vectors/search-text - Realiza búsqueda semántica e híbrida usando Gemma-300M en el Edge', async () => {
+        const aiEnv = {
+            ...env,
+            AI: {
+                run: async (model, input) => {
+                    assert.strictEqual(model, '@cf/google/embeddinggemma-300m');
+                    assert.deepStrictEqual(input, { text: ["buscar hola mundo"] });
+                    return { data: [new Array(768).fill(0.25)] };
+                }
+            }
+        };
+
+        const req = new Request('http://localhost/vectors/search-text', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-ai-col",
+                text: "buscar hola mundo",
+                limit: 1,
+                alpha: 0.5
+            })
+        });
+        const res = await worker.fetch(req, aiEnv, ctx);
+        assert.strictEqual(res.status, 200);
+        const body = await res.json();
+        assert.strictEqual(body.mensaje, "Búsqueda de texto completada usando EmbeddingGemma-300M");
+        assert.strictEqual(body.collection, "edge-ai-col");
+        assert.strictEqual(body.resultados.length, 1);
+        assert.strictEqual(body.resultados[0].id, "doc-ai-1");
+        assert.strictEqual(body.resultados[0].metadata.text, "Hola Mundo desde Cloudflare Workers AI");
+    });
 });
+
 
