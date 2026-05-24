@@ -113,8 +113,8 @@ vectorRouter.post('/search', (req, res, deps) => {
     }
 
     const slicedResults = results.slice(offset, offset + limitVal);
-    const totalDocs = store._collections.get(collection)?.ids.length || 0;
-    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
+    const totalDocs = store.count(collection);
+    const nextCursor = (slicedResults.length === limitVal && offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
     
     return {
         mensaje: "Búsqueda semántica completada",
@@ -174,8 +174,8 @@ vectorRouter.post('/search-hybrid', (req, res, deps) => {
     });
 
     const slicedResults = results.slice(offset, offset + limitVal);
-    const totalDocs = store._collections.get(collection)?.ids.length || 0;
-    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
+    const totalDocs = store.count(collection);
+    const nextCursor = (slicedResults.length === limitVal && offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
     
     return {
         mensaje: "Búsqueda híbrida completada",
