@@ -55,10 +55,11 @@ cptRouter.post('/schemas', (req, res, deps) => {
             name: cleanName,
             columns
         });
-        schemaCol.flush();
-
-        // Instantiate the table to trigger index creations if any
-        new Table(db, cleanName, { columns });
+        try {
+            schemaCol.flush();
+        } catch (flushErr) {
+            return res.json({ detail: "Error al persistir el esquema en disco", mensaje: flushErr.message }, 500);
+        }
 
         return {
             mensaje: `CPT '${cleanName}' registrado y guardado con éxito`,
@@ -122,17 +123,26 @@ cptRouter.post('/:collection', (req, res, deps) => {
             return res.json({ detail: `El CPT '${collection}' no está registrado.` }, 404);
         }
 
+        // NOTE: Uso consciente de métodos privados de js-doc-store Table:
+        // _applyDefaults, _validate y _col son APIs internas; se usan aquí para
+        // acceder al pipeline de validación sin duplicar lógica.
         const table = new Table(db, collection, { columns: schemaDoc.columns });
-        
+
         // 1. Apply defaults
         const defaultedDoc = table._applyDefaults(docData);
-        
-        // 2. Validate columns
+
+        // 2. Validate columns (throws on invalid data → caught as 400)
         table._validate(defaultedDoc);
-        
-        // 3. Insert and flush
+
+        // 3. Insert
         const inserted = table._col.insert(defaultedDoc);
-        table._col.flush();
+
+        // 4. Persist (disk/KV errors → 500)
+        try {
+            table._col.flush();
+        } catch (flushErr) {
+            return res.json({ detail: "Error al persistir el documento en disco", mensaje: flushErr.message }, 500);
+        }
 
         return {
             mensaje: "Documento insertado con éxito",
@@ -143,7 +153,78 @@ cptRouter.post('/:collection', (req, res, deps) => {
     }
 });
 
-// 5. Delete a document by ID
+// 5. Update/Edit a document by ID
+cptRouter.put('/:collection/:id', (req, res, deps) => {
+    const { collection, id } = req.params;
+    const docData = req.body;
+
+    try {
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(collection);
+        if (!schemaDoc) {
+            return res.json({ detail: `El CPT '${collection}' no está registrado.` }, 404);
+        }
+
+        const col = db.collection(collection);
+        const existing = col.findById(id);
+        if (!existing) {
+            return res.json({ detail: "Documento no encontrado" }, 404);
+        }
+
+        const table = new Table(db, collection, { columns: schemaDoc.columns });
+
+        const merged = { ...existing, ...docData, _id: existing._id };
+        const defaultedDoc = table._applyDefaults(merged);
+        table._validate(defaultedDoc);
+
+        col.update({ _id: id }, { $set: defaultedDoc });
+
+        try {
+            col.flush();
+        } catch (flushErr) {
+            return res.json({ detail: "Error al persistir la actualización en disco", mensaje: flushErr.message }, 500);
+        }
+
+        const updated = col.findById(id);
+        return {
+            mensaje: "Documento actualizado con éxito",
+            documento: updated
+        };
+    } catch (err) {
+        return res.json({ detail: "Error de validación o actualización", mensaje: err.message }, 400);
+    }
+});
+
+// 6. Delete a CPT schema AND all its data
+cptRouter.delete('/schemas/:name', (req, res, deps) => {
+    const { name } = req.params;
+
+    try {
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById(name);
+        if (!schemaDoc) {
+            return res.json({ detail: `El CPT '${name}' no está registrado.` }, 404);
+        }
+
+        schemaCol.removeById(name);
+        schemaCol.flush();
+
+        const col = db.collection(name);
+        const docs = col.find({}).toArray();
+        for (const doc of docs) {
+            col.removeById(doc._id);
+        }
+        col.flush();
+
+        return {
+            mensaje: `CPT '${name}' y todos sus documentos eliminados con éxito`
+        };
+    } catch (err) {
+        return res.json({ detail: "Error al eliminar el CPT", mensaje: err.message }, 500);
+    }
+});
+
+// 7. Delete a document by ID
 cptRouter.delete('/:collection/:id', (req, res, deps) => {
     const { collection, id } = req.params;
 
