@@ -29,8 +29,18 @@ const getStoreAndIndex = (req) => {
     };
 };
 
+// Helper asíncrono para asegurar la inicialización de la clave y precarga de archivos cifrados en el cache
+const ensureCryptoAndLoaded = async (store, collection) => {
+    await vectorDb.initCrypto();
+    if (store._adapter && typeof store._adapter.preload === 'function' && collection) {
+        const jsonFile = store._jsonFile(collection);
+        const binFile = store._binFile(collection);
+        await store._adapter.preload([jsonFile, binFile]);
+    }
+};
+
 // 1. Upsert de Vectores
-vectorRouter.post('/upsert', (req, res, deps) => {
+vectorRouter.post('/upsert', async (req, res, deps) => {
     const { collection, id, vector, metadata } = req.body;
     const { store, quantization } = getStoreAndIndex(req);
 
@@ -44,10 +54,14 @@ vectorRouter.post('/upsert', (req, res, deps) => {
         return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
     }
     
+    await ensureCryptoAndLoaded(store, collection);
     store.set(collection, id, vector, metadata || {});
     
     try {
         store.flush();
+        if (store._adapter && typeof store._adapter.persist === 'function') {
+            await store._adapter.persist();
+        }
     } catch (err) {
         return res.json({ detail: "Error al persistir el vector en disco", mensaje: err.message }, 500);
     }
@@ -71,7 +85,7 @@ vectorRouter.post('/upsert', (req, res, deps) => {
 });
 
 // 2. Búsqueda Semántica
-vectorRouter.post('/search', (req, res, deps) => {
+vectorRouter.post('/search', async (req, res, deps) => {
     const { collection, vector, limit, metric, dimSlice, filter, cursor } = req.body;
     const { store, idx, quantization } = getStoreAndIndex(req);
 
@@ -99,6 +113,8 @@ vectorRouter.post('/search', (req, res, deps) => {
         }
     }
     const fetchK = offset + limitVal;
+    
+    await ensureCryptoAndLoaded(store, collection);
     
     let results;
     if (idx.hasIndex(collection)) {
@@ -138,7 +154,7 @@ vectorRouter.post('/search', (req, res, deps) => {
 });
 
 // 2.5 Búsqueda Híbrida (Dense Vector + Sparse BM25)
-vectorRouter.post('/search-hybrid', (req, res, deps) => {
+vectorRouter.post('/search-hybrid', async (req, res, deps) => {
     const { collection, vector, text, limit, alpha, metric, cursor } = req.body;
     const { store, quantization } = getStoreAndIndex(req);
 
@@ -166,6 +182,8 @@ vectorRouter.post('/search-hybrid', (req, res, deps) => {
         }
     }
     const fetchK = offset + limitVal;
+    
+    await ensureCryptoAndLoaded(store, collection);
     
     const results = store.hybrid.search(collection, vector, text, fetchK, {
         vectorWeight: alphaVal,
@@ -200,7 +218,7 @@ vectorRouter.post('/search-hybrid', (req, res, deps) => {
 });
 
 // 3. Búsqueda Dimensional Matryoshka
-vectorRouter.post('/search-matryoshka', (req, res, deps) => {
+vectorRouter.post('/search-matryoshka', async (req, res, deps) => {
     const { collection, vector, limit, stages, metric } = req.body;
     const { store, quantization } = getStoreAndIndex(req);
 
@@ -211,6 +229,7 @@ vectorRouter.post('/search-matryoshka', (req, res, deps) => {
         return res.json({ detail: `Dimensión de vector de consulta inválida. Se espera ${store.dim} dimensiones.` }, 400);
     }
     
+    await ensureCryptoAndLoaded(store, collection);
     const results = store.matryoshkaSearch(collection, vector, limit || 5, stages, metric || 'cosine');
     return {
         mensaje: "Búsqueda dimensional Matryoshka completada",
@@ -231,7 +250,7 @@ vectorRouter.post('/search-matryoshka', (req, res, deps) => {
 });
 
 // 4. Búsqueda Cross-Collection con Normalización
-vectorRouter.post('/search-across', (req, res, deps) => {
+vectorRouter.post('/search-across', async (req, res, deps) => {
     const { collections, vector, limit, metric } = req.body;
     const { store, quantization } = getStoreAndIndex(req);
 
@@ -240,6 +259,13 @@ vectorRouter.post('/search-across', (req, res, deps) => {
     }
     if (vector.length !== store.dim) {
         return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
+    }
+    
+    await ensureCryptoAndLoaded(store, null);
+    for (const col of collections) {
+        if (store._adapter && typeof store._adapter.preload === 'function') {
+            await store._adapter.preload([store._jsonFile(col), store._binFile(col)]);
+        }
     }
     
     const results = store.searchAcross(collections, vector, limit || 5, metric || 'cosine');
@@ -261,7 +287,7 @@ vectorRouter.post('/search-across', (req, res, deps) => {
 });
 
 // 5. Construcción de Índice IVF K-means
-vectorRouter.post('/build-index', (req, res, deps) => {
+vectorRouter.post('/build-index', async (req, res, deps) => {
     const { collection, numClusters, numProbes } = req.body;
     const { store, idx, quantization } = getStoreAndIndex(req);
 
@@ -269,6 +295,7 @@ vectorRouter.post('/build-index', (req, res, deps) => {
         return res.json({ detail: "El campo 'collection' es obligatorio" }, 400);
     }
     
+    await ensureCryptoAndLoaded(store, collection);
     const count = store.count(collection);
     const k = numClusters || Math.max(2, Math.round(Math.sqrt(count)));
     const p = numProbes || Math.max(1, Math.round(k * 0.2));
@@ -297,6 +324,7 @@ vectorRouter.post('/build-index', (req, res, deps) => {
 // 6. Listar Colecciones Vectoriales
 vectorRouter.get('/collections', async (req, res, deps) => {
     const { store, quantization } = getStoreAndIndex(req);
+    await ensureCryptoAndLoaded(store, null);
     const cols = await store.listCollections();
     return {
         mensaje: "Colecciones vectoriales recuperadas con éxito",
@@ -308,8 +336,9 @@ vectorRouter.get('/collections', async (req, res, deps) => {
 });
 
 // 7. Estadísticas del Almacén Vectorial
-vectorRouter.get('/stats', (req, res, deps) => {
+vectorRouter.get('/stats', async (req, res, deps) => {
     const { store, quantization } = getStoreAndIndex(req);
+    await ensureCryptoAndLoaded(store, null);
     return {
         mensaje: "Estadísticas del motor vectorial",
         quantization,
@@ -323,6 +352,7 @@ vectorRouter.get('/stats', (req, res, deps) => {
 vectorRouter.delete('/collections/:name', async (req, res, deps) => {
     const col = req.params.name;
     const { store, quantization } = getStoreAndIndex(req);
+    await ensureCryptoAndLoaded(store, col);
     const cols = await store.listCollections();
     if (!cols.includes(col)) {
         return res.json({ detail: `Colección vectorial '${col}' no encontrada en el almacén (${quantization})` }, 404);

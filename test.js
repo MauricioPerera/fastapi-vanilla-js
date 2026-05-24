@@ -748,6 +748,127 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(bodyAfterLoad.resultados[0].score, searchBody.resultados[0].score, "Los scores deben coincidir al 100% tras la deserialización.");
     });
 
+    // Test 21: Encriptación Perimetral y Local AES-256-GCM sobre JSON y Binarios
+    await t.test('AES-256-GCM Encryption - Valida encriptación transparente de JSON y embeddings binarios en reposo', async (t) => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        const collectionName = "enc-test-col";
+
+        // 1. Configurar llave de encriptación temporal en el proceso
+        process.env.ENCRYPTION_KEY = "super-secret-crypto-password-123";
+
+        // Forzar re-inicialización del adaptador criptográfico local
+        const vectorDb = require('./dependencies/vector');
+        const store = vectorDb.getStore('float32');
+        
+        // Limpiar cualquier estado previo
+        store._collections.delete(collectionName);
+        store.bm25._data.delete(collectionName);
+        
+        // Resetear bandera de inicialización para forzar creación de EncryptedStorageAdapter
+        const { EncryptedStorageAdapter, FileStorageAdapter } = require('./lib/js-vector-store');
+        const path = require('path');
+        const vectorPath = path.resolve(__dirname, '.data', 'vectors');
+        const fileAdapter = new FileStorageAdapter(vectorPath);
+        const encAdapter = await EncryptedStorageAdapter.create(fileAdapter, process.env.ENCRYPTION_KEY);
+        
+        // Vincular adaptador cifrado a todas las instancias locales
+        for (const s of Object.values(vectorDb.stores)) {
+            s._adapter = encAdapter;
+        }
+
+        // 2. Upsert de documentos (cifrará JSON y BIN al persistir)
+        const upsertRes = await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                id: "e-doc-1",
+                vector: makeVector(0.25),
+                metadata: { text: "información secreta corporativa encriptada" }
+            })
+        });
+        assert.strictEqual(upsertRes.status, 200);
+
+        // 3. Verificar que los archivos estén físicamente cifrados en reposo en disco
+        const fs = require('fs');
+        const jsonPath = path.resolve(vectorPath, `${collectionName}.json`);
+        const binPath = path.resolve(vectorPath, `${collectionName}.bin`);
+
+        assert.ok(fs.existsSync(jsonPath), "El manifiesto JSON encriptado debería existir.");
+        assert.ok(fs.existsSync(binPath), "El vector binario encriptado debería existir.");
+
+        // Validar cifrado del manifiesto JSON
+        const rawJson = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+        assert.ok(rawJson.__enc, "El JSON manifiesto debe estar envuelto bajo la propiedad '__enc'.");
+        assert.ok(!rawJson.ids, "El JSON manifiesto no debe revelar las claves 'ids' en claro.");
+        assert.ok(!rawJson.meta, "El JSON manifiesto no debe revelar las claves 'meta' en claro.");
+
+        // Validar cifrado del archivo binario
+        const rawBin = fs.readFileSync(binPath);
+        // Dado que son 768 float32 (3072 bytes) + 12 bytes IV + 16 bytes GCM tag = 3100 bytes
+        assert.strictEqual(rawBin.byteLength, 3100, "El binario encriptado debe tener el overhead de 28 bytes de AES-GCM.");
+
+        // 4. Búsqueda híbrida para verificar que la desencriptación síncrona en memoria funciona
+        const searchRes1 = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                vector: makeVector(0.24),
+                text: "información",
+                limit: 1,
+                alpha: 0.5
+            })
+        });
+        assert.strictEqual(searchRes1.status, 200);
+        const searchBody1 = await searchRes1.json();
+        assert.strictEqual(searchBody1.resultados.length, 1);
+        assert.strictEqual(searchBody1.resultados[0].id, "e-doc-1");
+
+        // 5. Simular Cold Start (borrar cache en memoria de todas las instancias)
+        store._collections.delete(collectionName);
+        store.bm25._data.delete(collectionName);
+
+        // Volver a buscar (forzará la descarga y descifrado asíncrono desde el disco)
+        const searchRes2 = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                vector: makeVector(0.24),
+                text: "información",
+                limit: 1,
+                alpha: 0.5
+            })
+        });
+        assert.strictEqual(searchRes2.status, 200);
+        const searchBody2 = await searchRes2.json();
+        assert.strictEqual(searchBody2.resultados.length, 1);
+        assert.strictEqual(searchBody2.resultados[0].id, "e-doc-1", "Debe descifrar e indexar correctamente tras cold start.");
+
+        // 6. Limpieza y restauración del entorno limpio sin encriptación
+        delete process.env.ENCRYPTION_KEY;
+        for (const s of Object.values(vectorDb.stores)) {
+            s._adapter = fileAdapter; // restaurar adaptador limpio
+            s._collections.delete(collectionName);
+            s.bm25._data.delete(collectionName);
+        }
+        
+        // Borrar archivos de prueba
+        if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
+        if (fs.existsSync(binPath)) fs.unlinkSync(binPath);
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');

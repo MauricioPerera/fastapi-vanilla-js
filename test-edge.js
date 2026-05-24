@@ -320,5 +320,50 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         assert.strictEqual(body3.resultados.length, 1);
         assert.strictEqual(body3.nextCursor, null);
     });
+
+    // Test 15: Encriptación Perimetral AES-256-GCM en el Edge Worker
+    await t.test('POST /vectors/upsert y /search-hybrid - Valida encriptación AES-256-GCM perimetral en el Edge', async () => {
+        const encryptedEnv = {
+            MY_KV: env.MY_KV,
+            API_SECRET_TOKEN: env.API_SECRET_TOKEN,
+            ENCRYPTION_KEY: "edge-super-secret-password-xyz"
+        };
+
+        const upsertReq = new Request('http://localhost/vectors/upsert', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-enc-col",
+                id: "edoc-enc-1",
+                vector: new Array(768).fill(0.35),
+                metadata: { text: "secreto militar en el edge de cloudflare" }
+            })
+        });
+        const upsertRes = await worker.fetch(upsertReq, encryptedEnv, ctx);
+        assert.strictEqual(upsertRes.status, 200);
+
+        const searchReq = new Request('http://localhost/vectors/search-hybrid', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-enc-col",
+                vector: new Array(768).fill(0.34),
+                text: "secreto",
+                limit: 1,
+                alpha: 0.5
+            })
+        });
+        const searchRes = await worker.fetch(searchReq, encryptedEnv, ctx);
+        assert.strictEqual(searchRes.status, 200);
+        const searchBody = await searchRes.json();
+        assert.strictEqual(searchBody.resultados.length, 1);
+        assert.strictEqual(searchBody.resultados[0].id, "edoc-enc-1");
+    });
 });
 

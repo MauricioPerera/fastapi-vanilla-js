@@ -79,7 +79,34 @@ const getEdgeStore = (req) => {
     };
 };
 
-const preloadVectorCol = async (store, col) => {
+let cryptoInitialized = false;
+let cryptoInitPromise = null;
+
+async function ensureCryptoInitialized(env) {
+    if (cryptoInitialized) return;
+    if (cryptoInitPromise) return cryptoInitPromise;
+
+    cryptoInitPromise = (async () => {
+        const key = env && env.ENCRYPTION_KEY;
+        if (key && stores) {
+            const baseAdapter = stores.float32._adapter;
+            if (baseAdapter && !(baseAdapter instanceof EncryptedStorageAdapter)) {
+                const encAdapter = await EncryptedStorageAdapter.create(baseAdapter, key);
+                for (const store of Object.values(stores)) {
+                    store._adapter = encAdapter;
+                }
+            }
+        }
+        cryptoInitialized = true;
+    })();
+
+    return cryptoInitPromise;
+}
+
+const preloadVectorCol = async (store, col, env) => {
+    if (env) {
+        await ensureCryptoInitialized(env);
+    }
     if (store._adapter && typeof store._adapter.preload === 'function') {
         // NOTE: Accesos conscientes a métodos privados (_jsonFile y _binFile) de js-vector-store.
         // Se requieren para resolver los nombres de archivos físicos antes de la hidratación síncrona en memoria.
@@ -209,7 +236,7 @@ vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
         return new Response(JSON.stringify({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     
-    await preloadVectorCol(store, collection);
+    await preloadVectorCol(store, collection, env);
     store.set(collection, id, vector, metadata || {});
     await store.flush();
     
@@ -255,7 +282,7 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
     }
     const fetchK = offset + limitVal;
 
-    await preloadVectorCol(store, collection);
+    await preloadVectorCol(store, collection, env);
     const results = store.search(collection, vector, fetchK, sliceVal, metricVal, filter);
     const slicedResults = results.slice(offset, offset + limitVal);
     const totalDocs = store.count(collection);
@@ -307,7 +334,7 @@ vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
     }
     const fetchK = offset + limitVal;
 
-    await preloadVectorCol(store, collection);
+    await preloadVectorCol(store, collection, env);
     const results = store.hybrid.search(collection, vector, text, fetchK, {
         vectorWeight: alphaVal,
         textWeight: 1 - alphaVal,
@@ -374,7 +401,7 @@ vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
     if (!cols.includes(col)) {
         return new Response(JSON.stringify({ detail: `Colección vectorial '${col}' no encontrada en el Edge (${quantization})` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
-    await preloadVectorCol(store, col);
+    await preloadVectorCol(store, col, env);
     store.drop(col);
     return {
         mensaje: `Colección vectorial '${col}' eliminada con éxito del Edge (${quantization})`
