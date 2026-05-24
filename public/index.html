@@ -13,52 +13,70 @@
     
     <style>
         :root {
-            /* Colores Base (Tema Oscuro por Defecto) */
-            --bg-base: #0b0b0f;
-            --bg-surface: rgba(20, 20, 28, 0.45);
-            --bg-sidebar: rgba(13, 13, 19, 0.9);
-            --border-glow: rgba(255, 255, 255, 0.05);
-            --border-active: rgba(139, 92, 246, 0.4);
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
+            /* Default: HSL Zinc Dark Theme */
+            --background: 240 10% 3.9%;
+            --foreground: 0 0% 98%;
+            --card: 240 10% 3.9%;
+            --card-foreground: 0 0% 98%;
+            --popover: 240 10% 3.9%;
+            --popover-foreground: 0 0% 98%;
+            --primary: 0 0% 98%;
+            --primary-foreground: 240 5.9% 10%;
+            --secondary: 240 3.7% 15.9%;
+            --secondary-foreground: 0 0% 98%;
+            --muted: 240 3.7% 15.9%;
+            --muted-foreground: 240 5% 64.9%;
+            --accent: 240 3.7% 15.9%;
+            --accent-foreground: 0 0% 98%;
+            --destructive: 0 62.8% 30.6%;
+            --destructive-foreground: 0 0% 98%;
+            --border: 240 3.7% 15.9%;
+            --input: 240 3.7% 15.9%;
+            --ring: 240 4.9% 83.9%;
+            --radius: 0.5rem;
             
-            /* Colores de Acento Gradientes */
-            --primary: #8b5cf6;
-            --primary-glow: rgba(139, 92, 246, 0.15);
-            --cyan: #06b6d4;
-            --cyan-glow: rgba(6, 182, 212, 0.15);
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
+            /* Custom extra state colors */
+            --success: 142.1 76.2% 36.3%;
+            --warning: 38 92% 50%;
+            --danger: 0 84.2% 60.2%;
             
-            /* Transiciones y Efectos */
-            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --blur-strength: blur(16px);
+            /* Transitions and Effects */
+            --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        [data-theme="light"] {
-            /* Colores Base (Tema Claro) */
-            --bg-base: #f9fafb;
-            --bg-surface: rgba(255, 255, 255, 0.7);
-            --bg-sidebar: rgba(243, 244, 246, 0.95);
-            --border-glow: rgba(0, 0, 0, 0.06);
-            --border-active: rgba(139, 92, 246, 0.5);
-            --text-main: #111827;
-            --text-muted: #4b5563;
-            --primary-glow: rgba(139, 92, 246, 0.08);
-            --cyan-glow: rgba(6, 182, 212, 0.08);
+        body[data-theme="light"] {
+            /* HSL Zinc Light Theme */
+            --background: 0 0% 100%;
+            --foreground: 240 10% 3.9%;
+            --card: 0 0% 100%;
+            --card-foreground: 240 10% 3.9%;
+            --popover: 0 0% 100%;
+            --popover-foreground: 240 10% 3.9%;
+            --primary: 240 5.9% 10%;
+            --primary-foreground: 0 0% 98%;
+            --secondary: 240 4.8% 95.9%;
+            --secondary-foreground: 240 5.9% 10%;
+            --muted: 240 4.8% 95.9%;
+            --muted-foreground: 240 3.8% 46.1%;
+            --accent: 240 4.8% 95.9%;
+            --accent-foreground: 240 5.9% 10%;
+            --destructive: 0 84.2% 60.2%;
+            --destructive-foreground: 0 0% 98%;
+            --border: 240 5.9% 90%;
+            --input: 240 5.9% 90%;
+            --ring: 240 5.9% 10%;
         }
 
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
         body {
-            background-color: var(--bg-base);
-            color: var(--text-main);
+            background-color: hsl(var(--background));
+            color: hsl(var(--foreground));
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -67,14 +85,13 @@
 
         /* --- SIDEBAR --- */
         .sidebar {
-            width: 280px;
-            background: var(--bg-sidebar);
-            border-right: 1px solid var(--border-glow);
-            padding: 30px 20px;
+            width: 260px;
+            background: hsl(var(--card));
+            border-right: 1px solid hsl(var(--border));
+            padding: 24px 16px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            backdrop-filter: var(--blur-strength);
             z-index: 100;
             transition: var(--transition-smooth);
         }
@@ -82,50 +99,48 @@
         .brand {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 40px;
+            gap: 10px;
+            padding: 4px 8px;
+            margin-bottom: 24px;
         }
 
         .brand-logo {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary), var(--cyan));
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+            width: 32px;
+            height: 32px;
+            background: hsl(var(--primary));
+            border-radius: calc(var(--radius) - 2px);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 800;
-            color: white;
-            font-size: 20px;
+            font-weight: 700;
+            color: hsl(var(--primary-foreground));
+            font-size: 16px;
             font-family: 'Outfit', sans-serif;
         }
 
         .brand-name {
             font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            font-size: 20px;
+            font-size: 18px;
             letter-spacing: -0.5px;
-            background: linear-gradient(to right, var(--text-main), var(--primary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: hsl(var(--foreground));
         }
 
         .menu {
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 4px;
             flex-grow: 1;
         }
 
         .menu-item {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            color: var(--text-muted);
+            gap: 12px;
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            color: hsl(var(--muted-foreground));
             text-decoration: none;
             font-weight: 500;
             font-size: 14px;
@@ -134,16 +149,15 @@
             border: 1px solid transparent;
         }
 
-        .menu-item:hover, .menu-item.active {
-            color: var(--text-main);
-            background: var(--primary-glow);
-            border-color: var(--border-active);
-            transform: translateX(4px);
+        .menu-item:hover {
+            color: hsl(var(--foreground));
+            background: hsl(var(--accent));
         }
 
         .menu-item.active {
-            background: linear-gradient(90deg, var(--primary-glow), transparent);
-            box-shadow: inset 3px 0 0 var(--primary);
+            color: hsl(var(--foreground));
+            background: hsl(var(--accent));
+            font-weight: 600;
         }
 
         .sidebar-footer {
@@ -156,126 +170,116 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(0,0,0,0.15);
+            background: hsl(var(--secondary));
             padding: 8px 12px;
-            border-radius: 8px;
+            border-radius: var(--radius);
             font-size: 13px;
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             cursor: pointer;
-            border: 1px solid var(--border-glow);
+            border: 1px solid hsl(var(--border));
             transition: var(--transition-smooth);
         }
 
         .theme-toggle:hover {
-            border-color: var(--primary);
-            color: var(--text-main);
+            border-color: hsl(var(--ring));
+            color: hsl(var(--foreground));
         }
 
         /* --- CONTENT MAIN --- */
         .content {
             flex-grow: 1;
-            padding: 40px;
+            padding: 32px 40px;
             overflow-y: auto;
             position: relative;
             z-index: 10;
+            background-color: hsl(var(--background));
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid hsl(var(--border));
+            padding-bottom: 16px;
         }
 
         .header-title h1 {
             font-family: 'Outfit', sans-serif;
             font-weight: 700;
-            font-size: 28px;
+            font-size: 24px;
             letter-spacing: -0.5px;
+            color: hsl(var(--foreground));
         }
 
         .header-title p {
-            color: var(--text-muted);
-            font-size: 14px;
+            color: hsl(var(--muted-foreground));
+            font-size: 13px;
             margin-top: 4px;
         }
 
         .user-pill {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-glow);
-            padding: 6px 14px;
-            border-radius: 50px;
+            background: hsl(var(--secondary));
+            border: 1px solid hsl(var(--border));
+            padding: 6px 12px;
+            border-radius: var(--radius);
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
-            backdrop-filter: var(--blur-strength);
+            color: hsl(var(--foreground));
         }
 
         .user-indicator {
-            width: 8px;
-            height: 8px;
-            background: var(--success);
+            width: 6px;
+            height: 6px;
+            background: hsl(var(--success));
             border-radius: 50%;
-            box-shadow: 0 0 8px var(--success);
         }
 
-        /* --- GLASS CARDS --- */
+        /* --- SHADCN CARDS --- */
         .grid-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            gap: 16px;
+            margin-bottom: 24px;
         }
 
         .card-stat {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-glow);
-            border-radius: 16px;
-            padding: 24px;
-            backdrop-filter: var(--blur-strength);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02);
             transition: var(--transition-smooth);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .card-stat::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 4px; height: 100%;
-            background: linear-gradient(to bottom, var(--primary), var(--cyan));
         }
 
         .card-stat:hover {
-            transform: translateY(-5px);
-            border-color: var(--border-active);
-            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.15);
+            border-color: hsl(var(--ring));
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
 
         .card-stat-label {
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             font-size: 12px;
-            text-transform: uppercase;
             font-weight: 600;
+            text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .card-stat-val {
             font-family: 'Outfit', sans-serif;
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
-            margin-top: 8px;
-            background: linear-gradient(120deg, var(--text-main) 70%, var(--cyan));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            margin-top: 6px;
+            color: hsl(var(--foreground));
         }
 
         /* --- MAIN VIEW PANELS --- */
         .view-panel {
             display: none;
-            animation: fadeIn 0.4s ease-out forwards;
+            animation: fadeIn 0.25s ease-out forwards;
         }
 
         .view-panel.active {
@@ -283,17 +287,16 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .glass-box {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-glow);
-            border-radius: 16px;
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
             padding: 24px;
-            backdrop-filter: var(--blur-strength);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,0.02);
             margin-bottom: 24px;
             transition: var(--transition-smooth);
         }
@@ -302,18 +305,19 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid var(--border-glow);
+            margin-bottom: 16px;
+            border-bottom: 1px solid hsl(var(--border));
             padding-bottom: 12px;
         }
 
         .glass-box-title {
             font-family: 'Outfit', sans-serif;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
+            color: hsl(var(--foreground));
         }
 
         /* --- FORMS & INPUTS --- */
@@ -324,61 +328,77 @@
         .form-label {
             display: block;
             font-size: 12px;
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             margin-bottom: 6px;
             font-weight: 500;
         }
 
         .form-control {
             width: 100%;
-            background: rgba(0,0,0,0.2);
-            border: 1px solid var(--border-glow);
-            border-radius: 8px;
-            padding: 10px 14px;
-            color: var(--text-main);
+            background: hsl(var(--background));
+            border: 1px solid hsl(var(--input));
+            border-radius: var(--radius);
+            padding: 8px 12px;
+            color: hsl(var(--foreground));
             font-size: 13px;
             transition: var(--transition-smooth);
         }
 
         .form-control:focus {
             outline: none;
-            border-color: var(--primary);
-            background: rgba(0,0,0,0.3);
-            box-shadow: 0 0 10px var(--primary-glow);
+            border-color: hsl(var(--ring));
+            box-shadow: 0 0 0 2px hsl(var(--ring) / 0.15);
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
-            background: linear-gradient(135deg, var(--primary), var(--cyan));
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 10px 20px;
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            padding: 8px 16px;
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 500;
             cursor: pointer;
             transition: var(--transition-smooth);
-            box-shadow: 0 4px 15px var(--primary-glow);
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+            opacity: 0.9;
         }
 
         .btn-outline {
             background: transparent;
-            border: 1px solid var(--border-glow);
-            color: var(--text-main);
-            box-shadow: none;
+            border: 1px solid hsl(var(--border));
+            color: hsl(var(--foreground));
         }
 
         .btn-outline:hover {
-            background: var(--border-glow);
-            border-color: var(--text-muted);
-            box-shadow: none;
+            background: hsl(var(--accent));
+            color: hsl(var(--accent-foreground));
+        }
+
+        .btn-secondary {
+            background: hsl(var(--secondary));
+            color: hsl(var(--secondary-foreground));
+            border: 1px solid hsl(var(--border));
+        }
+
+        .btn-secondary:hover {
+            background: hsl(var(--accent));
+            color: hsl(var(--accent-foreground));
+        }
+
+        .btn-destructive {
+            background: hsl(var(--destructive));
+            color: hsl(var(--destructive-foreground));
+        }
+
+        .btn-destructive:hover {
+            opacity: 0.9;
         }
 
         /* --- DATA TABLES --- */
@@ -394,47 +414,48 @@
         }
 
         .table th {
-            padding: 12px 16px;
-            font-size: 12px;
+            padding: 10px 14px;
+            font-size: 11px;
             text-transform: uppercase;
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             font-weight: 600;
-            border-bottom: 1px solid var(--border-glow);
+            border-bottom: 1px solid hsl(var(--border));
         }
 
         .table td {
-            padding: 14px 16px;
+            padding: 12px 14px;
             font-size: 13px;
-            border-bottom: 1px solid var(--border-glow);
+            color: hsl(var(--foreground));
+            border-bottom: 1px solid hsl(var(--border));
         }
 
         .table tr:hover td {
-            background: rgba(255,255,255,0.02);
+            background: hsl(var(--muted) / 0.3);
         }
 
         /* --- VECTOR PLAYGROUND SPECIFICS --- */
         .pill-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             margin-bottom: 14px;
         }
 
         .pill {
-            background: rgba(255,255,255,0.03);
-            border: 1px solid var(--border-glow);
+            background: hsl(var(--secondary));
+            border: 1px solid hsl(var(--border));
             border-radius: 50px;
-            padding: 6px 12px;
+            padding: 4px 12px;
             font-size: 12px;
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             cursor: pointer;
             transition: var(--transition-smooth);
         }
 
         .pill:hover, .pill.active {
-            background: var(--cyan-glow);
-            border-color: var(--cyan);
-            color: var(--cyan);
+            background: hsl(var(--primary));
+            border-color: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
         }
 
         .score-bar-container {
@@ -448,38 +469,38 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            background: rgba(0,0,0,0.15);
+            background: hsl(var(--secondary) / 0.5);
             padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border-glow);
+            border-radius: var(--radius);
+            border: 1px solid hsl(var(--border));
             transition: var(--transition-smooth);
         }
 
         .score-bar-row:hover {
-            border-color: var(--cyan);
+            border-color: hsl(var(--ring));
         }
 
         .score-bar-id {
             width: 80px;
             font-size: 13px;
             font-weight: 600;
-            color: var(--cyan);
+            color: hsl(var(--foreground));
         }
 
         .score-bar-track {
             flex-grow: 1;
-            height: 8px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 4px;
+            height: 6px;
+            background: hsl(var(--muted));
+            border-radius: 3px;
             overflow: hidden;
         }
 
         .score-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--cyan));
-            border-radius: 4px;
+            background: hsl(var(--primary));
+            border-radius: 3px;
             width: 0%;
-            transition: width 0.8s cubic-bezier(0.1, 0.8, 0.2, 1);
+            transition: width 0.6s cubic-bezier(0.1, 0.8, 0.2, 1);
         }
 
         .score-bar-val {
@@ -487,14 +508,15 @@
             font-weight: 700;
             width: 50px;
             text-align: right;
+            color: hsl(var(--foreground));
         }
 
         /* --- LOGIN OVERLAY MODAL --- */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(5,5,8,0.85);
-            backdrop-filter: blur(12px);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
             z-index: 1000;
             display: flex;
             align-items: center;
@@ -510,15 +532,14 @@
         }
 
         .modal-box {
-            background: rgba(20, 20, 28, 0.7);
-            border: 1px solid var(--border-active);
-            border-radius: 20px;
-            width: 420px;
-            padding: 34px;
-            box-shadow: 0 20px 50px rgba(139,92,246,0.3);
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            width: 440px;
+            padding: 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
             text-align: center;
-            backdrop-filter: var(--blur-strength);
-            transform: scale(0.9);
+            transform: scale(0.95);
             transition: var(--transition-smooth);
         }
 
@@ -527,19 +548,36 @@
         }
 
         .modal-box-header {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .modal-box-header h2 {
             font-family: 'Outfit', sans-serif;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
             margin-bottom: 6px;
+            color: hsl(var(--foreground));
         }
 
         .modal-box-header p {
-            color: var(--text-muted);
+            color: hsl(var(--muted-foreground));
             font-size: 13px;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: hsl(var(--border));
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: hsl(var(--muted-foreground) / 0.5);
         }
     </style>
 </head>
@@ -685,22 +723,24 @@
                 </div>
                 
                 <!-- Añadir Ítem Formulario en caliente -->
-                <div id="add-item-box" style="display: none; margin-bottom: 20px; padding: 16px; background: rgba(0,0,0,0.15); border-radius: 10px; border: 1px solid var(--border-glow);">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div id="add-item-box" style="display: none; margin-bottom: 20px; padding: 16px; background: hsl(var(--secondary) / 0.5); border: 1px solid hsl(var(--border)); border-radius: var(--radius);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                         <div class="form-group">
                             <label class="form-label">Nombre del Artículo</label>
                             <input type="text" class="form-control" id="new-item-name" placeholder="Ej: Teclado">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Precio ($)</label>
-                            <input type="number" class="form-control" id="new-item-price" placeholder="Ej: 85">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">En Oferta</label>
-                            <select class="form-control" id="new-item-offer">
-                                <option value="true">Sí</option>
-                                <option value="false" selected>No</option>
-                            </select>
+                        <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label class="form-label">Precio ($)</label>
+                                <input type="number" class="form-control" id="new-item-price" placeholder="Ej: 85">
+                            </div>
+                            <div>
+                                <label class="form-label">En Oferta</label>
+                                <select class="form-control" id="new-item-offer">
+                                    <option value="true">Sí</option>
+                                    <option value="false" selected>No</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <button class="btn" onclick="saveItem()">Guardar Ítem en Disco</button>
@@ -734,21 +774,21 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px; margin-top: 14px;">
+                <div style="display: grid; grid-template-columns: 260px 1fr; gap: 20px; margin-top: 14px;">
                     <!-- Left: CPT List -->
-                    <div style="background: rgba(0,0,0,0.15); border-radius: 8px; padding: 14px; border: 1px solid var(--border-glow); max-height: 400px; overflow-y: auto;">
-                        <h4 style="margin-top: 0; color: var(--text-glow); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 14px;">Colecciones CPT</h4>
+                    <div style="background: hsl(var(--secondary) / 0.3); border-radius: var(--radius); padding: 14px; border: 1px solid hsl(var(--border)); max-height: 400px; overflow-y: auto;">
+                        <h4 style="margin-top: 0; color: hsl(var(--foreground)); border-bottom: 1px solid hsl(var(--border)); padding-bottom: 8px; font-size: 14px; font-weight: 600;">Colecciones CPT</h4>
                         <div id="cpt-menu-list" style="display: flex; flex-direction: column; gap: 8px;">
                             <!-- Dynamically loaded CPT list -->
                         </div>
                     </div>
 
                     <!-- Right: Dynamic Table Viewer -->
-                    <div id="cpt-viewer-panel" style="background: rgba(0,0,0,0.1); border-radius: 8px; padding: 14px; border: 1px solid var(--border-glow); display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
-                            <h3 id="cpt-active-title" style="margin: 0; color: var(--cyan); font-size: 16px;">Colección: ...</h3>
+                    <div id="cpt-viewer-panel" style="background: hsl(var(--secondary) / 0.1); border-radius: var(--radius); padding: 14px; border: 1px solid hsl(var(--border)); display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid hsl(var(--border)); padding-bottom: 8px;">
+                            <h3 id="cpt-active-title" style="margin: 0; color: hsl(var(--foreground)); font-size: 15px; font-weight: 600;">Colección: ...</h3>
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <label style="font-size: 12px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                <label style="font-size: 12px; color: hsl(var(--muted-foreground)); cursor: pointer; display: flex; align-items: center; gap: 4px;">
                                     <input type="checkbox" id="cpt-expand-relations-chk" onchange="loadCptDocuments()"> Expandir Relaciones (Populate)
                                 </label>
                                 <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="openAddCptRecordModal()">+ Nuevo Registro</button>
@@ -946,7 +986,7 @@
 
     <!-- MODAL OVERLAY: CPT SCHEMA CREATOR -->
     <div class="modal-overlay" id="cpt-creator-modal">
-        <div class="modal-box" style="max-width: 650px; background: #0f111a; border: 1px solid var(--accent);">
+        <div class="modal-box" style="max-width: 600px;">
             <div class="modal-box-header">
                 <h2>📐 Registrar Custom Post Type</h2>
                 <p>Define una nueva colección CPT con columnas dinámicas, tipado y referencias relacionales.</p>
@@ -962,7 +1002,7 @@
                     <label class="form-label" style="margin: 0;">Campos / Columnas del Esquema</label>
                     <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="addCptColumnRow()">+ Añadir Campo</button>
                 </div>
-                <div id="cpt-dynamic-columns" style="max-height: 250px; overflow-y: auto; padding-right: 4px; border: 1px solid rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2);">
+                <div id="cpt-dynamic-columns" style="max-height: 250px; overflow-y: auto; padding-right: 4px; border: 1px solid hsl(var(--border)); padding: 8px; border-radius: var(--radius); background: hsl(var(--secondary) / 0.3);">
                     <!-- Column input rows get rendered here dynamically -->
                 </div>
             </div>
@@ -976,7 +1016,7 @@
 
     <!-- MODAL OVERLAY: ADD CPT RECORD -->
     <div class="modal-overlay" id="cpt-record-modal">
-        <div class="modal-box" style="max-width: 500px; background: #0f111a; border: 1px solid var(--accent);">
+        <div class="modal-box" style="max-width: 500px;">
             <div class="modal-box-header">
                 <h2 id="cpt-record-modal-title">📝 Añadir Registro CPT</h2>
                 <p>Ingresa los valores respetando el tipado y restricciones del esquema de la colección.</p>
@@ -989,6 +1029,25 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
                 <button class="btn btn-outline" onclick="closeAddCptRecordModal()">Cancelar</button>
                 <button class="btn" onclick="saveCptRecord()">Insertar Registro</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OVERLAY: EDIT CPT RECORD -->
+    <div class="modal-overlay" id="cpt-edit-record-modal">
+        <div class="modal-box" style="max-width: 500px;">
+            <div class="modal-box-header">
+                <h2 id="cpt-edit-record-modal-title">✏️ Editar Registro CPT</h2>
+                <p>Modifica los valores del registro seleccionado.</p>
+            </div>
+            
+            <div id="cpt-edit-record-form-fields" style="text-align: left; max-height: 350px; overflow-y: auto; padding-right: 4px;">
+                <!-- Dynamic edit form fields loaded here -->
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeEditCptRecordModal()">Cancelar</button>
+                <button class="btn" onclick="updateCptRecord()">Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -1016,7 +1075,7 @@
             </div>
             
             <button class="btn" style="width: 100%; justify-content: center; margin-top: 14px;" onclick="handleLogin()">Ingresar al Dashboard</button>
-            <div id="login-error-msg" style="color: var(--danger); font-size: 12px; margin-top: 12px; font-weight: 500;"></div>
+            <div id="login-error-msg" style="color: hsl(var(--destructive)); font-size: 12px; margin-top: 12px; font-weight: 500;"></div>
         </div>
     </div>
 
@@ -1758,15 +1817,33 @@
                 
                 if (data.cpts && data.cpts.length > 0) {
                     data.cpts.forEach(cpt => {
+                        const wrapper = document.createElement('div');
+                        wrapper.style.cssText = 'display: flex; gap: 4px; align-items: stretch; margin-bottom: 6px;';
+
                         const btn = document.createElement('button');
                         btn.className = 'btn btn-outline';
-                        btn.style.textAlign = 'left';
-                        btn.style.width = '100%';
-                        btn.style.justifyContent = 'flex-start';
-                        btn.style.marginBottom = '6px';
+                        btn.style.cssText = 'text-align: left; flex: 1; justify-content: flex-start; margin: 0;';
                         btn.innerHTML = `📂 ${cpt.name} <span style="font-size:10px; color:#aaa; margin-left:auto;">(${cpt.columns.length} campos)</span>`;
                         btn.onclick = () => selectCpt(cpt.name, cpt.columns);
-                        menuList.appendChild(btn);
+
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'btn btn-outline';
+                        editBtn.style.cssText = 'padding: 2px 6px; font-size: 11px; margin: 0; color: var(--cyan); border-color: rgba(6,182,212,0.2);';
+                        editBtn.title = 'Editar esquema';
+                        editBtn.innerHTML = '✏️';
+                        editBtn.onclick = (e) => { e.stopPropagation(); editCptSchema(cpt.name, cpt.columns); };
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'btn btn-outline';
+                        delBtn.style.cssText = 'padding: 2px 6px; font-size: 11px; margin: 0; color: var(--danger); border-color: rgba(239,68,68,0.2);';
+                        delBtn.title = 'Eliminar esquema y datos';
+                        delBtn.innerHTML = '🗑️';
+                        delBtn.onclick = (e) => { e.stopPropagation(); deleteCptSchema(cpt.name); };
+
+                        wrapper.appendChild(btn);
+                        wrapper.appendChild(editBtn);
+                        wrapper.appendChild(delBtn);
+                        menuList.appendChild(wrapper);
                     });
                 } else {
                     menuList.innerHTML = '<div style="font-size:12px; color:#aaa; text-align:center; padding:10px;">Ningún CPT registrado.</div>';
@@ -1830,7 +1907,7 @@
                             }
                         });
 
-                        rowHtml += `<td><button class="btn btn-outline" style="padding: 2px 8px; font-size:10px; color:var(--danger); border-color:rgba(239,68,68,0.2);" onclick="deleteCptRecord('${doc._id}')">Borrar</button></td></tr>`;
+                        rowHtml += `<td style="display: flex; gap: 4px;"><button class="btn btn-outline" style="padding: 2px 8px; font-size:10px; color:var(--cyan); border-color:rgba(6,182,212,0.2);" onclick="openEditCptRecordModal('${doc._id}')">Editar</button><button class="btn btn-outline" style="padding: 2px 8px; font-size:10px; color:var(--danger); border-color:rgba(239,68,68,0.2);" onclick="deleteCptRecord('${doc._id}')">Borrar</button></td></tr>`;
                         tableBody.innerHTML += rowHtml;
                     });
                 } else {
@@ -1862,8 +1939,8 @@
             row.style.alignItems = 'center';
 
             row.innerHTML = `
-                <input type="text" class="form-control column-name" placeholder="Nombre Campo" style="padding:6px; font-size:12px; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">
-                <select class="form-control column-type" style="padding:6px; font-size:12px; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;" onchange="handleColumnTypeChange(this)">
+                <input type="text" class="form-control column-name" placeholder="Nombre Campo" style="padding:6px; font-size:12px; height: 32px;">
+                <select class="form-control column-type" style="padding:6px; font-size:12px; height: 32px;" onchange="handleColumnTypeChange(this)">
                     <option value="text">Texto</option>
                     <option value="number">Número</option>
                     <option value="checkbox">Checkbox (Booleano)</option>
@@ -1876,7 +1953,7 @@
                 <div class="column-extra-container" style="font-size:11px;">
                     <!-- Configuración adicional dinámica -->
                 </div>
-                <button class="btn btn-outline" style="color:var(--danger); border-color:transparent; padding: 4px 8px; font-size: 12px;" onclick="this.parentElement.remove()">✕</button>
+                <button class="btn btn-outline" style="color: hsl(var(--destructive)); border-color:transparent; padding: 4px 8px; font-size: 12px;" onclick="this.parentElement.remove()">✕</button>
             `;
             container.appendChild(row);
         }
@@ -1887,9 +1964,9 @@
             const type = selectElement.value;
             
             if (type === 'select') {
-                container.innerHTML = `<input type="text" class="form-control column-opts" placeholder="opciones (a,b,c)" style="padding:4px; font-size:10px; height: 26px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                container.innerHTML = `<input type="text" class="form-control column-opts" placeholder="opciones (a,b,c)" style="padding:4px; font-size:10px; height: 26px;">`;
             } else if (type === 'relation') {
-                container.innerHTML = `<input type="text" class="form-control column-target" placeholder="CPT Destino" style="padding:4px; font-size:10px; height: 26px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                container.innerHTML = `<input type="text" class="form-control column-target" placeholder="CPT Destino" style="padding:4px; font-size:10px; height: 26px;">`;
             }
         }
 
@@ -2079,6 +2156,190 @@
 
         function loadFastMcpData() {
             connectMcpSse();
+        }
+
+        // ============================================================================
+        // CPT CRUD: EDIT SCHEMA, DELETE SCHEMA, EDIT RECORD
+        // ============================================================================
+
+        let editingCptRecordId = null;
+
+        function editCptSchema(name, columns) {
+            document.getElementById('cpt-creator-modal').classList.add('active');
+            document.getElementById('cpt-new-name').value = name;
+            const container = document.getElementById('cpt-dynamic-columns');
+            container.innerHTML = '';
+
+            columns.forEach(col => {
+                addCptColumnRow();
+                const rows = container.querySelectorAll('.cpt-column-input-row');
+                const lastRow = rows[rows.length - 1];
+                lastRow.querySelector('.column-name').value = col.name;
+                lastRow.querySelector('.column-type').value = col.type;
+                if (col.required) lastRow.querySelector('.column-req').checked = true;
+
+                // Trigger extra fields
+                handleColumnTypeChange(lastRow.querySelector('.column-type'));
+
+                if (col.type === 'select' && col.options) {
+                    const optsEl = lastRow.querySelector('.column-opts');
+                    if (optsEl) optsEl.value = col.options.join(', ');
+                } else if (col.type === 'relation' && col.collection) {
+                    const targetEl = lastRow.querySelector('.column-target');
+                    if (targetEl) targetEl.value = col.collection;
+                }
+            });
+        }
+
+        async function deleteCptSchema(name) {
+            if (!confirm(`¿Estás seguro de eliminar el CPT '${name}' y TODOS sus datos? Esta acción no se puede deshacer.`)) return;
+            try {
+                const res = await fetch(`/cpts/schemas/${name}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.status === 200) {
+                    if (activeCptName === name) {
+                        activeCptName = null;
+                        activeCptColumns = [];
+                        document.getElementById('cpt-viewer-panel').style.display = 'none';
+                    }
+                    loadCpts();
+                } else {
+                    const data = await res.json();
+                    alert(`Error: ${data.detail || data.mensaje}`);
+                }
+            } catch (err) {
+                console.error('Error eliminando CPT schema:', err);
+            }
+        }
+
+        async function openEditCptRecordModal(docId) {
+            if (!activeCptName) return;
+            editingCptRecordId = docId;
+
+            const container = document.getElementById('cpt-edit-record-form-fields');
+            container.innerHTML = '';
+            document.getElementById('cpt-edit-record-modal-title').innerText = `✏️ Editar: ${activeCptName} / ${docId}`;
+
+            // Fetch current document data
+            let currentDoc = null;
+            try {
+                const res = await fetch(`/cpts/${activeCptName}`, {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.status === 200) {
+                    const data = await res.json();
+                    currentDoc = data.documentos.find(d => d._id === docId);
+                }
+            } catch (e) {
+                console.error('Error fetching doc for edit:', e);
+            }
+
+            if (!currentDoc) {
+                alert('No se pudo cargar el documento para editar.');
+                return;
+            }
+
+            for (const col of activeCptColumns) {
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+                formGroup.style.marginBottom = '12px';
+                const currentVal = currentDoc[col.name];
+
+                let inputHtml = `<label class="form-label">${col.name} ${col.required ? '<span style="color:var(--danger)">*</span>' : ''} <span style="font-size:10px; color:#888;">(${col.type})</span></label>`;
+
+                if (col.type === 'checkbox') {
+                    const checked = currentVal ? 'checked' : '';
+                    inputHtml = `
+                        <label style="display:flex; gap:8px; align-items:center; cursor:pointer;" class="form-label">
+                            <input type="checkbox" id="cpt-edit-field-${col.name}" ${checked}> ${col.name} ${col.required ? '<span style="color:var(--danger)">*</span>' : ''}
+                        </label>
+                    `;
+                } else if (col.type === 'select') {
+                    let optsHtml = '';
+                    if (col.options) {
+                        col.options.forEach(opt => {
+                            const selected = opt === currentVal ? 'selected' : '';
+                            optsHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
+                        });
+                    }
+                    inputHtml += `<select class="form-control" id="cpt-edit-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">${optsHtml}</select>`;
+                } else if (col.type === 'relation') {
+                    let dropdownOpts = '<option value="">-- Seleccionar Relación --</option>';
+                    try {
+                        const rRes = await fetch(`/cpts/${col.collection}`, {
+                            headers: { 'Authorization': `Bearer ${jwtToken}` }
+                        });
+                        if (rRes.status === 200) {
+                            const rData = await rRes.json();
+                            if (rData.documentos && rData.documentos.length > 0) {
+                                rData.documentos.forEach(doc => {
+                                    const display = doc.nombre || doc.titulo || doc.name || doc._id;
+                                    const selected = doc._id === currentVal ? 'selected' : '';
+                                    dropdownOpts += `<option value="${doc._id}" ${selected}>${display} (${doc._id})</option>`;
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error cargando relaciones para edición:', e);
+                    }
+                    inputHtml += `<select class="form-control" id="cpt-edit-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">${dropdownOpts}</select>`;
+                } else if (col.type === 'number') {
+                    inputHtml += `<input type="number" class="form-control" id="cpt-edit-field-${col.name}" value="${currentVal !== undefined ? currentVal : ''}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                } else {
+                    inputHtml += `<input type="text" class="form-control" id="cpt-edit-field-${col.name}" value="${currentVal !== undefined ? currentVal : ''}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                }
+
+                formGroup.innerHTML = inputHtml;
+                container.appendChild(formGroup);
+            }
+
+            document.getElementById('cpt-edit-record-modal').classList.add('active');
+        }
+
+        function closeEditCptRecordModal() {
+            document.getElementById('cpt-edit-record-modal').classList.remove('active');
+            editingCptRecordId = null;
+        }
+
+        async function updateCptRecord() {
+            if (!editingCptRecordId || !activeCptName) return;
+
+            const body = {};
+            activeCptColumns.forEach(col => {
+                const element = document.getElementById(`cpt-edit-field-${col.name}`);
+                if (!element) return;
+
+                if (col.type === 'checkbox') {
+                    body[col.name] = element.checked;
+                } else if (col.type === 'number') {
+                    body[col.name] = element.value === '' ? undefined : Number(element.value);
+                } else {
+                    body[col.name] = element.value;
+                }
+            });
+
+            try {
+                const res = await fetch(`/cpts/${activeCptName}/${editingCptRecordId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (res.status === 200) {
+                    closeEditCptRecordModal();
+                    loadCptDocuments();
+                } else {
+                    const data = await res.json();
+                    alert(`Error al actualizar: ${data.detail || data.mensaje}`);
+                }
+            } catch (err) {
+                console.error('Error actualizando registro CPT:', err);
+            }
         }
     </script>
 </body>

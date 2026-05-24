@@ -869,6 +869,88 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         if (fs.existsSync(binPath)) fs.unlinkSync(binPath);
     });
 
+    await t.test('WordPress-style CPT - Valida creación de CPT, inserción, actualización (PUT) y eliminación de esquema (DELETE)', async () => {
+        // 1. Iniciar sesión para obtener el token JWT
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'admin@test.com', password: 'password123' })
+        });
+        assert.strictEqual(loginRes.status, 200);
+        const { token } = await loginRes.json();
+
+        // 2. Registrar CPT 'libros'
+        const cptRes = await fetch(`${BASE_URL}/cpts/schemas`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: "libros",
+                columns: [
+                    { name: 'titulo', type: 'text', required: true },
+                    { name: 'paginas', type: 'number', required: false }
+                ]
+            })
+        });
+        assert.strictEqual(cptRes.status, 200);
+        const cptBody = await cptRes.json();
+        assert.strictEqual(cptBody.cpt.name, 'libros');
+
+        // 3. Insertar un libro
+        const insertRes = await fetch(`${BASE_URL}/cpts/libros`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                titulo: "El Hobbit",
+                paginas: 310
+            })
+        });
+        assert.strictEqual(insertRes.status, 200);
+        const insertBody = await insertRes.json();
+        const bookId = insertBody.documento._id;
+        assert.ok(bookId);
+        assert.strictEqual(insertBody.documento.titulo, 'El Hobbit');
+        assert.strictEqual(insertBody.documento.paginas, 310);
+
+        // 4. Actualizar libro (PUT)
+        const updateRes = await fetch(`${BASE_URL}/cpts/libros/${bookId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                titulo: "El Hobbit Pro",
+                paginas: 320
+            })
+        });
+        assert.strictEqual(updateRes.status, 200);
+        const updateBody = await updateRes.json();
+        assert.strictEqual(updateBody.documento.titulo, 'El Hobbit Pro');
+        assert.strictEqual(updateBody.documento.paginas, 320);
+
+        // 5. Leer colección libros y verificar que persisten cambios tras PUT
+        const getRes = await fetch(`${BASE_URL}/cpts/libros`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        assert.strictEqual(getRes.status, 200);
+        const getBody = await getRes.json();
+        assert.strictEqual(getBody.conteo, 1);
+        assert.strictEqual(getBody.documentos[0].titulo, 'El Hobbit Pro');
+        assert.strictEqual(getBody.documentos[0].paginas, 320);
+
+        // 6. Eliminar el esquema de libros y todos sus datos
+        const deleteRes = await fetch(`${BASE_URL}/cpts/schemas/libros`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        assert.strictEqual(deleteRes.status, 200);
+        const deleteBody = await deleteRes.json();
+        assert.ok(deleteBody.mensaje.includes("eliminados con éxito"));
+
+        // 7. Intentar consultar libros y recibir 404 (CPT no existe)
+        const getDeletedRes = await fetch(`${BASE_URL}/cpts/libros`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        assert.strictEqual(getDeletedRes.status, 404);
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');
