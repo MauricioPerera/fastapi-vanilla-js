@@ -750,6 +750,15 @@
                             <input type="number" step="0.05" class="form-control" id="vector-val" value="0.9" onchange="updatePresetValue()">
                         </div>
                         <div class="form-group">
+                            <label class="form-label">Optimización (Cuantización)</label>
+                            <select class="form-control" id="vector-quant">
+                                <option value="float32" selected>Ninguna (Float32 Completo)</option>
+                                <option value="int8">Int8 (QuantizedStore ~4x)</option>
+                                <option value="binary">1-Bit (BinaryQuantizedStore ~32x)</option>
+                                <option value="polar">3-Bit (PolarQuantizedStore ~8x)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label class="form-label">Categoría (Metadata)</label>
                             <input type="text" class="form-control" id="vector-cat" placeholder="Ej: medicina">
                         </div>
@@ -772,7 +781,16 @@
                             <div class="glass-box-title">🌐 Vector Semantic Search Playground</div>
                         </div>
                         
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div class="form-group">
+                                <label class="form-label">Optimización (Cuantización)</label>
+                                <select class="form-control" id="search-quant">
+                                    <option value="float32" selected>Ninguna (Float32)</option>
+                                    <option value="int8">Int8 (Int8Array)</option>
+                                    <option value="binary">1-Bit (Hamming)</option>
+                                    <option value="polar">3-Bit (PolarQuant)</option>
+                                </select>
+                            </div>
                             <div class="form-group">
                                 <label class="form-label">Métrica de Similitud</label>
                                 <select class="form-control" id="search-metric">
@@ -812,23 +830,52 @@
 
         <!-- VIEW: FASTMCP -->
         <div id="view-fastmcp" class="view-panel">
-            <div class="glass-box">
-                <div class="glass-box-header">
-                    <div class="glass-box-title">🧠 Herramientas del Servidor FastMCP Registradas (JSON-RPC)</div>
+            <div style="display: grid; grid-template-columns: 1fr 400px; gap: 24px;">
+                <!-- Columna Izquierda: Tabla de Herramientas -->
+                <div class="glass-box">
+                    <div class="glass-box-header">
+                        <div class="glass-box-title">🧠 Herramientas del Servidor FastMCP Registradas</div>
+                        <span id="sse-status-badge" style="font-size: 11px; padding: 4px 10px; border-radius: 50px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger);">SSE Desconectado</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Haz clic en cualquier herramienta para abrir el patio de juegos interactivo JSON-RPC sobre SSE.</p>
+                    <div class="table-container">
+                        <table class="table" id="mcp-tools-table">
+                            <thead>
+                                <tr>
+                                    <th>Herramienta</th>
+                                    <th>Descripción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Relleno dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="table-container">
-                    <table class="table" id="mcp-tools-table">
-                        <thead>
-                            <tr>
-                                <th>Herramienta</th>
-                                <th>Descripción</th>
-                                <th>Esquema Entrada</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Se rellena vía fetch de Swagger /docs o mcp schemas -->
-                        </tbody>
-                    </table>
+
+                <!-- Columna Derecha: Patio de Juegos de Ejecución -->
+                <div>
+                    <div class="glass-box" id="mcp-execution-box" style="display: none;">
+                        <div class="glass-box-header">
+                            <div class="glass-box-title" id="mcp-tool-title">⚡ Ejecutar: obtener_metricas</div>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;" id="mcp-tool-desc">Descripción de la herramienta.</p>
+                        
+                        <div id="mcp-dynamic-fields-container" style="margin-bottom: 16px;">
+                            <!-- Campos dinámicos -->
+                        </div>
+
+                        <button class="btn" style="width: 100%; justify-content: center; margin-bottom: 20px;" onclick="executeSelectedMcpTool()">Ejecutar Herramienta (JSON-RPC)</button>
+
+                        <div class="glass-box-header">
+                            <div class="glass-box-title" style="font-size: 13px; color: var(--cyan);">Respuesta del Servidor (JSON-RPC 2.0)</div>
+                        </div>
+                        <pre id="mcp-rpc-output" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); padding: 14px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; color: #10b981; max-height: 250px; margin-top: 10px; white-space: pre-wrap;">Esperando ejecución...</pre>
+                    </div>
+                    <div class="glass-box" id="mcp-no-selection" style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+                        <span style="font-size: 32px; display: block; margin-bottom: 10px;">👆</span>
+                        Selecciona una herramienta de la lista para abrir el patio de juegos interactivo.
+                    </div>
                 </div>
             </div>
         </div>
@@ -1161,6 +1208,7 @@
             const col = 'docs';
             const id = document.getElementById('vector-id').value || 'vec-custom';
             const category = document.getElementById('vector-cat').value || 'general';
+            const quant = document.getElementById('vector-quant').value;
             const vector = makeVectorForJs(currentPresetVal);
 
             try {
@@ -1174,12 +1222,13 @@
                         collection: col,
                         id,
                         vector,
-                        metadata: { category }
+                        metadata: { category },
+                        quantization: quant
                     })
                 });
 
                 if (res.status === 200) {
-                    alert(`Éxito: Vector '${id}' indexado en colección 'docs' con val=${currentPresetVal}`);
+                    alert(`Éxito [${quant}]: Vector '${id}' indexado con val=${currentPresetVal}`);
                 } else {
                     const data = await res.json();
                     alert(data.detail || 'Error al indexar vector');
@@ -1190,6 +1239,7 @@
         }
 
         async function buildIvfIndex() {
+            const quant = document.getElementById('vector-quant').value;
             try {
                 const res = await fetch('/vectors/build-index', {
                     method: 'POST',
@@ -1200,12 +1250,13 @@
                     body: JSON.stringify({
                         collection: 'docs',
                         numClusters: 2,
-                        numProbes: 1
+                        numProbes: 1,
+                        quantization: quant
                     })
                 });
 
                 if (res.status === 200) {
-                    alert('Índice IVF K-means construido en caliente con éxito. Las búsquedas serán aceleradas.');
+                    alert(`Índice IVF [${quant}] construido en caliente con éxito.`);
                 } else {
                     const data = await res.json();
                     alert(data.detail || 'Fallo al construir índice IVF');
@@ -1229,10 +1280,11 @@
             const col = 'docs';
             const limit = Number(document.getElementById('search-limit').value) || 3;
             const metric = document.getElementById('search-metric').value;
+            const quant = document.getElementById('search-quant').value;
             const vector = makeVectorForJs(currentSearchQueryPresetVal);
 
             const container = document.getElementById('search-results-output');
-            container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">Consultando vectores densos en disco...</div>`;
+            container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">Consultando vectores [${quant}] en disco...</div>`;
 
             try {
                 const res = await fetch('/vectors/search', {
@@ -1245,7 +1297,8 @@
                         collection: col,
                         vector,
                         limit,
-                        metric
+                        metric,
+                        quantization: quant
                     })
                 });
 
@@ -1254,12 +1307,10 @@
                     container.innerHTML = '';
                     if (data.resultados && data.resultados.length > 0) {
                         data.resultados.forEach(item => {
-                            // Convertir score a porcentaje visual para la barra (Cosine 0-1)
                             let percent = 0;
                             if (metric === 'cosine' || metric === 'dotProduct') {
                                 percent = Math.max(0, Math.min(100, Math.round(item.score * 100)));
                             } else {
-                                // Euclidean/Manhattan score es 1/(1+dist) que va de 0 a 1
                                 percent = Math.max(0, Math.min(100, Math.round(item.score * 100)));
                             }
                             
@@ -1278,7 +1329,7 @@
                             `;
                         });
                     } else {
-                        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">No se encontraron vectores indexados en la colección 'docs'.</div>`;
+                        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">No se encontraron vectores indexados en '${col}' [${quant}].</div>`;
                     }
                 } else {
                     const data = await res.json();
@@ -1290,31 +1341,212 @@
         }
 
         function loadVectorStoreData() {
-            // Inicializar presets de vector ID
             document.getElementById('vector-id').value = 'med-' + Math.floor(Math.random() * 100);
             document.getElementById('vector-cat').value = 'medicina';
         }
 
-        // --- FASTMCP CONSOLE LÓGICA ---
+        // --- FASTMCP SSE CLIENT CONSOLE IMPLEMENTATION ---
+        let sseClientUrl = null;
+        let sseEventSource = null;
+        let jsonRpcIdCounter = 1;
+        const mcpCallbacks = new Map(); // id -> callback
+        let registeredMcpTools = [];
+        let selectedMcpToolName = null;
+
+        function connectMcpSse() {
+            const badge = document.getElementById('sse-status-badge');
+            if (sseEventSource) {
+                sseEventSource.close();
+            }
+
+            sseEventSource = new EventSource('/sse');
+
+            sseEventSource.addEventListener('endpoint', (e) => {
+                sseClientUrl = e.data;
+                console.log("[SSE] Endpoint JSON-RPC recibido:", sseClientUrl);
+                badge.textContent = "SSE Conectado";
+                badge.style.background = "rgba(16, 185, 129, 0.15)";
+                badge.style.color = "var(--success)";
+                badge.style.borderColor = "var(--success)";
+                
+                fetchMcpTools();
+            });
+
+            sseEventSource.addEventListener('message', (e) => {
+                try {
+                    const response = JSON.parse(e.data);
+                    console.log("[SSE] Respuesta JSON-RPC recibida:", response);
+                    if (response.id && mcpCallbacks.has(response.id)) {
+                        const cb = mcpCallbacks.get(response.id);
+                        mcpCallbacks.delete(response.id);
+                        cb(response);
+                    }
+                } catch (err) {
+                    console.error("[SSE] Error procesando mensaje JSON-RPC:", err);
+                }
+            });
+
+            sseEventSource.onerror = (err) => {
+                console.error("[SSE] Error o desconexión en el canal SSE:", err);
+                badge.textContent = "SSE Desconectado";
+                badge.style.background = "rgba(239, 68, 68, 0.15)";
+                badge.style.color = "var(--danger)";
+                badge.style.borderColor = "var(--danger)";
+            };
+        }
+
+        function sendMcpRequest(method, params, callback) {
+            if (!sseClientUrl) {
+                console.error("[SSE] No hay endpoint SSE registrado para enviar mensaje");
+                return;
+            }
+            const id = `web-${jsonRpcIdCounter++}`;
+            mcpCallbacks.set(id, callback);
+
+            fetch(sseClientUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    id,
+                    method,
+                    params
+                })
+            }).catch(err => {
+                console.error("[SSE] Fallo al enviar petición POST a /message:", err);
+                mcpCallbacks.delete(id);
+            });
+        }
+
+        function fetchMcpTools() {
+            sendMcpRequest("tools/list", {}, (response) => {
+                if (response.result && response.result.tools) {
+                    registeredMcpTools = response.result.tools;
+                    renderMcpTools(registeredMcpTools);
+                }
+            });
+        }
+
+        function renderMcpTools(tools) {
+            const tbody = document.querySelector('#mcp-tools-table tbody');
+            tbody.innerHTML = '';
+            
+            if (tools.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="2" style="text-align: center; color: var(--text-muted);">No hay herramientas registradas en el servidor MCP.</td></tr>`;
+                return;
+            }
+
+            tools.forEach(tool => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => selectMcpTool(tool.name);
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: var(--primary);">${tool.name}</td>
+                    <td>${tool.description || 'Sin descripción.'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function selectMcpTool(name) {
+            const tool = registeredMcpTools.find(t => t.name === name);
+            if (!tool) return;
+
+            selectedMcpToolName = name;
+            
+            document.getElementById('mcp-no-selection').style.display = 'none';
+            const executionBox = document.getElementById('mcp-execution-box');
+            executionBox.style.display = 'block';
+
+            document.getElementById('mcp-tool-title').textContent = `⚡ Ejecutar: ${tool.name}`;
+            document.getElementById('mcp-tool-desc').textContent = tool.description || 'Sin descripción.';
+            document.getElementById('mcp-rpc-output').textContent = 'Esperando ejecución...';
+
+            const container = document.getElementById('mcp-dynamic-fields-container');
+            container.innerHTML = '';
+
+            const schema = tool.inputSchema;
+            if (schema && schema.properties && Object.keys(schema.properties).length > 0) {
+                for (const [propName, propDetails] of Object.entries(schema.properties)) {
+                    const isRequired = schema.required && schema.required.includes(propName);
+                    
+                    const group = document.createElement('div');
+                    group.className = 'form-group';
+                    group.style.textAlign = 'left';
+                    group.style.marginBottom = '12px';
+
+                    const label = document.createElement('label');
+                    label.className = 'form-label';
+                    label.textContent = `${propName} (${propDetails.type})${isRequired ? ' *' : ''}`;
+                    group.appendChild(label);
+
+                    let input;
+                    if (propDetails.type === 'string' && propName === 'contenido') {
+                        input = document.createElement('textarea');
+                        input.rows = 4;
+                        input.className = 'form-control';
+                        input.id = `mcp-arg-${propName}`;
+                        input.placeholder = `Ingresa ${propName}...`;
+                    } else {
+                        input = document.createElement('input');
+                        input.type = propDetails.type === 'number' ? 'number' : 'text';
+                        input.className = 'form-control';
+                        input.id = `mcp-arg-${propName}`;
+                        input.placeholder = propDetails.description || `Valor para ${propName}`;
+                    }
+
+                    if (propName === 'ruta') input.value = '.logs/auditoria_consola.log';
+                    if (propName === 'contenido') input.value = 'Log de auditoría de prueba generado de manera interactiva desde la Consola Administrativa.';
+
+                    group.appendChild(input);
+                    container.appendChild(group);
+                }
+            } else {
+                container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 10px 0; background: rgba(0,0,0,0.15); border-radius: 8px;">Esta herramienta no requiere argumentos de entrada.</div>`;
+            }
+        }
+
+        function executeSelectedMcpTool() {
+            if (!selectedMcpToolName) return;
+
+            const tool = registeredMcpTools.find(t => t.name === selectedMcpToolName);
+            if (!tool) return;
+
+            const args = {};
+            const schema = tool.inputSchema;
+            if (schema && schema.properties) {
+                for (const propName of Object.keys(schema.properties)) {
+                    const inputEl = document.getElementById(`mcp-arg-${propName}`);
+                    if (inputEl) {
+                        let val = inputEl.value;
+                        if (schema.properties[propName].type === 'number') {
+                            val = Number(val);
+                        }
+                        args[propName] = val;
+                    }
+                }
+            }
+
+            const outputEl = document.getElementById('mcp-rpc-output');
+            outputEl.textContent = 'Enviando comando JSON-RPC sobre SSE...';
+
+            sendMcpRequest("tools/call", { name: selectedMcpToolName, arguments: args }, (response) => {
+                if (response.error) {
+                    outputEl.style.color = 'var(--danger)';
+                    outputEl.textContent = JSON.stringify(response.error, null, 4);
+                } else {
+                    outputEl.style.color = '#10b981';
+                    outputEl.textContent = JSON.stringify(response.result, null, 4);
+                }
+                
+                updateMetricsDirectly();
+            });
+        }
+
         function loadFastMcpData() {
-            const table = document.querySelector('#mcp-tools-table tbody');
-            table.innerHTML = `
-                <tr>
-                    <td style="font-weight: 600; color: var(--primary);">obtener_metricas</td>
-                    <td>Retorna el uso de memoria RAM, carga de CPU del proceso local y estado operativo.</td>
-                    <td><span style="font-family: monospace; background: rgba(0,0,0,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">{}</span></td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; color: var(--primary);">guardar_log</td>
-                    <td>Audita y persiste logs del sistema localmente de forma segura.</td>
-                    <td><span style="font-family: monospace; background: rgba(0,0,0,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">{ ruta: string, contenido: string }</span></td>
-                </tr>
-                <tr>
-                    <td style="font-weight: 600; color: var(--primary);">consultar_estado_api</td>
-                    <td>Consulta el estado actual y disponibilidad de la API REST local.</td>
-                    <td><span style="font-family: monospace; background: rgba(0,0,0,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px;">{}</span></td>
-                </tr>
-            `;
+            connectMcpSse();
         }
     </script>
 </body>

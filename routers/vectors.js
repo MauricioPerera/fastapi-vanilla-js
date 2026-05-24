@@ -3,8 +3,14 @@ const { getCurrentUser } = require('../dependencies/auth');
 const vectorDb = require('../dependencies/vector');
 const { IVFIndex } = require('../lib/js-vector-store');
 
-// Instancia singleton compartida de IVFIndex
-const ivfIndex = new IVFIndex(vectorDb);
+// Instancias de IVFIndex dedicadas para cada variante de almacén
+const ivfIndexes = {
+    float32: new IVFIndex(vectorDb.stores.float32),
+    int8: new IVFIndex(vectorDb.stores.int8),
+    binary: new IVFIndex(vectorDb.stores.binary),
+    polar: new IVFIndex(vectorDb.stores.polar)
+};
+const getIvfIndex = (type) => ivfIndexes[type] || ivfIndexes.float32;
 
 const vectorRouter = new APIRouter({
     prefix: '/vectors',
@@ -12,23 +18,36 @@ const vectorRouter = new APIRouter({
     dependencies: { user: getCurrentUser }
 });
 
+// Helper para extraer la cuantización y resolver el almacén correspondiente
+const getStoreAndIndex = (req) => {
+    const q = req.body?.quantization || req.query?.quantization || 'float32';
+    const quantization = ['float32', 'int8', 'binary', 'polar'].includes(q) ? q : 'float32';
+    return {
+        store: vectorDb.getStore(quantization),
+        idx: getIvfIndex(quantization),
+        quantization
+    };
+};
+
 // 1. Upsert de Vectores
 vectorRouter.post('/upsert', (req, res, deps) => {
     const { collection, id, vector, metadata } = req.body;
+    const { store, quantization } = getStoreAndIndex(req);
+
     if (!collection || !id || !Array.isArray(vector)) {
         return res.json({ detail: "Campos 'collection', 'id' y 'vector' son obligatorios" }, 400);
     }
-    if (vector.length !== vectorDb.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
+    if (vector.length !== store.dim) {
+        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
     }
     if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
         return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
     }
     
-    vectorDb.set(collection, id, vector, metadata || {});
+    store.set(collection, id, vector, metadata || {});
     
     try {
-        vectorDb.flush();
+        store.flush();
     } catch (err) {
         return res.json({ detail: "Error al persistir el vector en disco", mensaje: err.message }, 500);
     }
@@ -37,6 +56,7 @@ vectorRouter.post('/upsert', (req, res, deps) => {
         mensaje: "Vector indexado con éxito",
         collection,
         id,
+        quantization,
         usuario: deps.user.email || deps.user.username
     };
 }, {
@@ -45,18 +65,21 @@ vectorRouter.post('/upsert', (req, res, deps) => {
         collection: { type: 'string', required: true },
         id: { type: 'string', required: true },
         vector: { type: 'array', required: true },
-        metadata: { type: 'object', required: false }
+        metadata: { type: 'object', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
 // 2. Búsqueda Semántica
 vectorRouter.post('/search', (req, res, deps) => {
     const { collection, vector, limit, metric, dimSlice, filter } = req.body;
+    const { store, idx, quantization } = getStoreAndIndex(req);
+
     if (!collection || !Array.isArray(vector)) {
         return res.json({ detail: "Campos 'collection' y 'vector' son obligatorios" }, 400);
     }
-    if (vector.length !== vectorDb.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
+    if (vector.length !== store.dim) {
+        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
     }
     if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
         return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
@@ -67,22 +90,21 @@ vectorRouter.post('/search', (req, res, deps) => {
     const sliceVal = dimSlice || 0;
     
     let results;
-    if (ivfIndex.hasIndex(collection)) {
-        // NOTA DE DISEÑO: Hacemos uso consciente del método de API privada `_loadIndex` 
-        // de js-vector-store.js para recuperar los metadatos serializados del índice IVF (como `numProbes`).
-        // Dado que la firma del método es interna, se documenta aquí en caso de futuras actualizaciones del motor.
-        const idxData = ivfIndex._loadIndex(collection);
+    if (idx.hasIndex(collection)) {
+        // Restaurar numProbes si se encuentra en los metadatos cargados
+        const idxData = idx._loadIndex(collection);
         if (idxData && idxData.numProbes) {
-            ivfIndex.numProbes = idxData.numProbes;
+            idx.numProbes = idxData.numProbes;
         }
-        results = ivfIndex.search(collection, vector, limitVal);
+        results = idx.search(collection, vector, limitVal);
     } else {
-        results = vectorDb.search(collection, vector, limitVal, sliceVal, metricVal, filter);
+        results = store.search(collection, vector, limitVal, sliceVal, metricVal, filter);
     }
     
     return {
         mensaje: "Búsqueda semántica completada",
         collection,
+        quantization,
         resultados: results
     };
 }, {
@@ -93,24 +115,28 @@ vectorRouter.post('/search', (req, res, deps) => {
         limit: { type: 'number', required: false },
         metric: { type: 'string', required: false },
         dimSlice: { type: 'number', required: false },
-        filter: { type: 'object', required: false }
+        filter: { type: 'object', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
 // 3. Búsqueda Dimensional Matryoshka
 vectorRouter.post('/search-matryoshka', (req, res, deps) => {
     const { collection, vector, limit, stages, metric } = req.body;
+    const { store, quantization } = getStoreAndIndex(req);
+
     if (!collection || !Array.isArray(vector) || !Array.isArray(stages)) {
         return res.json({ detail: "Campos 'collection', 'vector' y 'stages' son obligatorios" }, 400);
     }
-    if (vector.length !== vectorDb.dim) {
-        return res.json({ detail: `Dimensión de vector de consulta inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
+    if (vector.length !== store.dim) {
+        return res.json({ detail: `Dimensión de vector de consulta inválida. Se espera ${store.dim} dimensiones.` }, 400);
     }
     
-    const results = vectorDb.matryoshkaSearch(collection, vector, limit || 5, stages, metric || 'cosine');
+    const results = store.matryoshkaSearch(collection, vector, limit || 5, stages, metric || 'cosine');
     return {
         mensaje: "Búsqueda dimensional Matryoshka completada",
         collection,
+        quantization,
         resultados: results
     };
 }, {
@@ -120,24 +146,28 @@ vectorRouter.post('/search-matryoshka', (req, res, deps) => {
         vector: { type: 'array', required: true },
         stages: { type: 'array', required: true },
         limit: { type: 'number', required: false },
-        metric: { type: 'string', required: false }
+        metric: { type: 'string', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
 // 4. Búsqueda Cross-Collection con Normalización
 vectorRouter.post('/search-across', (req, res, deps) => {
     const { collections, vector, limit, metric } = req.body;
+    const { store, quantization } = getStoreAndIndex(req);
+
     if (!Array.isArray(collections) || !Array.isArray(vector)) {
         return res.json({ detail: "Campos 'collections' y 'vector' son obligatorios" }, 400);
     }
-    if (vector.length !== vectorDb.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
+    if (vector.length !== store.dim) {
+        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
     }
     
-    const results = vectorDb.searchAcross(collections, vector, limit || 5, metric || 'cosine');
+    const results = store.searchAcross(collections, vector, limit || 5, metric || 'cosine');
     return {
         mensaje: "Búsqueda cross-collection con normalización completada",
         colecciones: collections,
+        quantization,
         resultados: results
     };
 }, {
@@ -146,30 +176,32 @@ vectorRouter.post('/search-across', (req, res, deps) => {
         collections: { type: 'array', required: true },
         vector: { type: 'array', required: true },
         limit: { type: 'number', required: false },
-        metric: { type: 'string', required: false }
+        metric: { type: 'string', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
 // 5. Construcción de Índice IVF K-means
 vectorRouter.post('/build-index', (req, res, deps) => {
     const { collection, numClusters, numProbes } = req.body;
+    const { store, idx, quantization } = getStoreAndIndex(req);
+
     if (!collection) {
         return res.json({ detail: "El campo 'collection' es obligatorio" }, 400);
     }
     
-    const count = vectorDb.count(collection);
-    
-    // Configuración heurística inteligente de clusters (K ≈ sqrt(N))
+    const count = store.count(collection);
     const k = numClusters || Math.max(2, Math.round(Math.sqrt(count)));
     const p = numProbes || Math.max(1, Math.round(k * 0.2));
     
-    ivfIndex.numClusters = k;
-    ivfIndex.numProbes = p;
-    ivfIndex.build(collection);
+    idx.numClusters = k;
+    idx.numProbes = p;
+    idx.build(collection);
     
     return {
         mensaje: "Índice invertido IVF K-means construido con éxito",
         collection,
+        quantization,
         clusters: k,
         probes: p
     };
@@ -178,15 +210,18 @@ vectorRouter.post('/build-index', (req, res, deps) => {
     body: {
         collection: { type: 'string', required: true },
         numClusters: { type: 'number', required: false },
-        numProbes: { type: 'number', required: false }
+        numProbes: { type: 'number', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
 // 6. Listar Colecciones Vectoriales
 vectorRouter.get('/collections', async (req, res, deps) => {
-    const cols = await vectorDb.listCollections();
+    const { store, quantization } = getStoreAndIndex(req);
+    const cols = await store.listCollections();
     return {
         mensaje: "Colecciones vectoriales recuperadas con éxito",
+        quantization,
         collections: cols
     };
 }, {
@@ -195,9 +230,11 @@ vectorRouter.get('/collections', async (req, res, deps) => {
 
 // 7. Estadísticas del Almacén Vectorial
 vectorRouter.get('/stats', (req, res, deps) => {
+    const { store, quantization } = getStoreAndIndex(req);
     return {
         mensaje: "Estadísticas del motor vectorial",
-        stats: vectorDb.stats()
+        quantization,
+        stats: store.stats()
     };
 }, {
     summary: "Métricas del Motor Vectorial"
@@ -206,13 +243,14 @@ vectorRouter.get('/stats', (req, res, deps) => {
 // 8. Eliminar Colección Vectorial
 vectorRouter.delete('/collections/:name', async (req, res, deps) => {
     const col = req.params.name;
-    const cols = await vectorDb.listCollections();
+    const { store, quantization } = getStoreAndIndex(req);
+    const cols = await store.listCollections();
     if (!cols.includes(col)) {
-        return res.json({ detail: `Colección vectorial '${col}' no encontrada` }, 404);
+        return res.json({ detail: `Colección vectorial '${col}' no encontrada en el almacén (${quantization})` }, 404);
     }
-    vectorDb.drop(col);
+    store.drop(col);
     return {
-        mensaje: `Colección vectorial '${col}' eliminada con éxito`
+        mensaje: `Colección vectorial '${col}' eliminada con éxito del almacén (${quantization})`
     };
 }, {
     summary: "Eliminar Colección Vectorial"

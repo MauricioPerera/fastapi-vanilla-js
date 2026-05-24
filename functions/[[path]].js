@@ -1,6 +1,6 @@
 import { FastAPI, APIRouter } from '../lib/fastapi-edge.js';
 import { DocStore, MemoryStorageAdapter, CloudflareKVAdapter, Auth } from '../lib/js-doc-store.js';
-import { VectorStore } from '../lib/js-vector-store.js';
+import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore } from '../lib/js-vector-store.js';
 
 // 1. Inicializar la aplicación para Pages Functions
 const app = new FastAPI({
@@ -27,7 +27,7 @@ app.addMiddleware(async (request, env, ctx, next) => {
 let db;
 let auth;
 let authInitialized = false;
-let vectorDb;
+let stores;
 
 function ensureDbAndAuth(env) {
     if (!db) {
@@ -40,12 +40,16 @@ function ensureDbAndAuth(env) {
             secret: env.API_SECRET_TOKEN || 'pages-secret-token'
         });
     }
-    if (!vectorDb) {
-        if (env && env.MY_KV) {
-            vectorDb = new VectorStore(new CloudflareKVAdapter(env.MY_KV, 'vectors/'), 768);
-        } else {
-            vectorDb = new VectorStore(new MemoryStorageAdapter(), 768);
-        }
+    if (!stores) {
+        const adapter = (env && env.MY_KV)
+            ? new CloudflareKVAdapter(env.MY_KV, 'vectors/')
+            : new MemoryStorageAdapter();
+        stores = {
+            float32: new VectorStore(adapter, 768),
+            int8: new QuantizedStore(adapter, 768),
+            binary: new BinaryQuantizedStore(adapter, 768),
+            polar: new PolarQuantizedStore(adapter, 768)
+        };
     }
 }
 
@@ -65,7 +69,17 @@ async function ensureAuthInit(env) {
     }
 }
 
-// 3. Resolver de Dependencia de Seguridad en Pages Functions con base de datos real
+// Helper para extraer la cuantización y resolver el almacén correspondiente
+const getEdgeStore = (req) => {
+    const q = req.body?.quantization || 'float32';
+    const quantization = ['float32', 'int8', 'binary', 'polar'].includes(q) ? q : 'float32';
+    return {
+        store: stores[quantization],
+        quantization
+    };
+};
+
+// 3. Dependency Resolver para Usuarios de Pages
 const getPagesUser = async (request, env, ctx) => {
     await ensureAuthInit(env);
     const authHeader = request.headers.get('authorization');
@@ -76,7 +90,7 @@ const getPagesUser = async (request, env, ctx) => {
     
     // Bypass de desarrollo para tests retrocompatibles
     if (token === 'pages-secret-token') {
-        return { username: "pages_operator", role: "admin" };
+        return { username: "pages_developer", role: "admin" };
     }
 
     const payload = await auth.verify(token);
@@ -86,17 +100,17 @@ const getPagesUser = async (request, env, ctx) => {
     return auth.getUser(payload.sub);
 };
 
-// 4. Manejo de Excepciones del Edge
+// 4. Manejo de Errores en Pages Functions
 app.addExceptionHandler(Error, (request, err, env, ctx) => {
     let status = 500;
-    let detail = "Internal Pages Functions Error";
+    let detail = "Internal Pages Error";
     
     if (err.message === "Unauthorized") {
         status = 401;
-        detail = "No autorizado en Cloudflare Pages Functions";
+        detail = "No autorizado a nivel perimetral";
     } else if (err.message === "Forbidden") {
         status = 403;
-        detail = "Acceso prohibido en Cloudflare Pages Functions";
+        detail = "Acceso denegado a nivel perimetral";
     } else {
         detail = err.message;
     }
@@ -118,8 +132,8 @@ const productRouter = new APIRouter({
 productRouter.get('/', (request) => {
     return {
         items: [
-            { id: 701, nombre: "Cloudflare Pages", tipo: "Alojamiento estático global" },
-            { id: 702, nombre: "Cloudflare Functions", tipo: "Serverless Edge Functions" }
+            { id: 501, nombre: "Cloudflare KV (Pages)", tipo: "Base de Datos en el Edge" },
+            { id: 502, nombre: "Cloudflare D1 (Pages)", tipo: "SQL en el Edge" }
         ],
         origen: "Cloudflare Pages Network"
     };
@@ -128,7 +142,7 @@ productRouter.get('/', (request) => {
 productRouter.get('/:id', (request) => {
     return {
         producto_id: Number(request.params.id),
-        estado: "Servido en tiempo real desde el Edge de Cloudflare"
+        estado: "Disponible en caché perimetral de Pages"
     };
 });
 
@@ -154,9 +168,121 @@ secureRouter.post('/deploy', (request, env, ctx, deps) => {
     }
 });
 
+// ----------------------------------------------------------------------------
+// ROUTER DE VECTORES EN EL EDGE (/vectors)
+// ----------------------------------------------------------------------------
+const vectorRouter = new APIRouter({
+    prefix: "/vectors",
+    tags: ["Vectores"],
+    dependencies: { user: getPagesUser }
+});
+
+vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
+    const { collection, id, vector, metadata } = request.body;
+    const { store, quantization } = getEdgeStore(request);
+    
+    if (!collection || !id || !Array.isArray(vector)) {
+        return { detail: "Campos 'collection', 'id' y 'vector' son obligatorios", status_code: 400 };
+    }
+    if (vector.length !== store.dim) {
+        return { detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.`, status_code: 400 };
+    }
+    
+    store.set(collection, id, vector, metadata || {});
+    await store.flush();
+    
+    return {
+        mensaje: "Vector indexado con éxito en el Edge",
+        collection,
+        id,
+        quantization
+    };
+}, {
+    body: {
+        collection: { type: 'string', required: true },
+        id: { type: 'string', required: true },
+        vector: { type: 'array', required: true }
+    }
+});
+
+vectorRouter.post('/search', async (request, env, ctx, deps) => {
+    const { collection, vector, limit, metric, dimSlice, filter } = request.body;
+    const { store, quantization } = getEdgeStore(request);
+    
+    if (!collection || !Array.isArray(vector)) {
+        return { detail: "Campos 'collection' y 'vector' son obligatorios", status_code: 400 };
+    }
+    if (vector.length !== store.dim) {
+        return { detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.`, status_code: 400 };
+    }
+    
+    const limitVal = limit || 5;
+    const metricVal = metric || 'cosine';
+    const sliceVal = dimSlice || 0;
+    
+    const results = store.search(collection, vector, limitVal, sliceVal, metricVal, filter);
+    return {
+        mensaje: "Búsqueda semántica completada en el Edge",
+        collection,
+        quantization,
+        resultados: results
+    };
+}, {
+    body: {
+        collection: { type: 'string', required: true },
+        vector: { type: 'array', required: true }
+    }
+});
+
+vectorRouter.post('/build-index', async (request, env, ctx, deps) => {
+    const { collection } = request.body;
+    const { quantization } = getEdgeStore(request);
+    if (!collection) {
+        return { detail: "El campo 'collection' es obligatorio", status_code: 400 };
+    }
+    return {
+        mensaje: "Índice invertido IVF K-means simulado en el Edge",
+        collection,
+        quantization
+    };
+});
+
+vectorRouter.get('/collections', async (request, env, ctx, deps) => {
+    const { store, quantization } = getEdgeStore(request);
+    const cols = await store.listCollections();
+    return {
+        mensaje: "Colecciones vectoriales recuperadas con éxito en el Edge",
+        quantization,
+        collections: cols
+    };
+});
+
+vectorRouter.get('/stats', async (request, env, ctx, deps) => {
+    const { store, quantization } = getEdgeStore(request);
+    return {
+        mensaje: "Estadísticas del motor vectorial en el Edge",
+        quantization,
+        stats: store.stats()
+    };
+});
+
+vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
+    const col = request.params.name;
+    const { store, quantization } = getEdgeStore(request);
+    const cols = await store.listCollections();
+    if (!cols.includes(col)) {
+        return { detail: `Colección vectorial '${col}' no encontrada en el Edge (${quantization})`, status_code: 404 };
+    }
+    store.drop(col);
+    return {
+        mensaje: `Colección vectorial '${col}' eliminada con éxito del Edge (${quantization})`
+    };
+});
+
 // Incluir enrutadores
 app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
+app.includeRouter(vectorRouter);
 
 // Ruta Raíz de la API REST
 app.get('/', (request) => {
@@ -170,6 +296,5 @@ app.get('/', (request) => {
 // 5. EXPORTACIÓN DEL PUNTO DE ENTRADA EXCLUSIVO PARA CLOUDFLARE PAGES FUNCTIONS
 export async function onRequest(context) {
     const { request, env } = context;
-    // Redirigir el control completo de la petición a nuestro framework FastAPI Edge
     return await app.handle(request, env, context);
 }

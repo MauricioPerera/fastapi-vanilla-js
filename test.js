@@ -423,6 +423,63 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(searchBody.resultados[0].id, "tech-1"); // Más cercano a 0.15 (0.2 vs 0.9)
     });
 
+    // Test 17: Búsqueda Semántica con Cuantización Vectorial Dinámica (Int8, 1-Bit, 3-Bit Polar)
+    await t.test('POST /vectors/upsert y /search (Cuantización) - Almacena y busca con compresión Int8, Binary y Polar', async () => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        const modes = ['int8', 'binary', 'polar'];
+        for (const mode of modes) {
+            // Upsert en el almacén cuantizado
+            const upsertRes = await fetch(`${BASE_URL}/vectors/upsert`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    collection: "docs-quant",
+                    id: `med-${mode}`,
+                    vector: makeVector(0.9),
+                    metadata: { category: "medicina", mode },
+                    quantization: mode
+                })
+            });
+            assert.strictEqual(upsertRes.status, 200, `Upsert falló en modo cuantizado: ${mode}`);
+            const upsertBody = await upsertRes.json();
+            assert.strictEqual(upsertBody.quantization, mode);
+
+            // Búsqueda en el almacén cuantizado
+            const searchRes = await fetch(`${BASE_URL}/vectors/search`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    collection: "docs-quant",
+                    vector: makeVector(0.95),
+                    limit: 1,
+                    metric: "cosine",
+                    quantization: mode
+                })
+            });
+            assert.strictEqual(searchRes.status, 200, `Search falló en modo cuantizado: ${mode}`);
+            const searchBody = await searchRes.json();
+            assert.strictEqual(searchBody.resultados.length, 1);
+            assert.strictEqual(searchBody.resultados[0].id, `med-${mode}`, `Búsqueda falló en modo: ${mode}`);
+            assert.strictEqual(searchBody.quantization, mode);
+        }
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');
