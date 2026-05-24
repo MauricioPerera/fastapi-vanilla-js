@@ -1,6 +1,7 @@
 const { FastAPI } = require('./lib/fastapi');
 const userRouter = require('./routers/users');
 const itemRouter = require('./routers/items');
+const vectorRouter = require('./routers/vectors');
 const { UnauthorizedError } = require('./dependencies/auth');
 const path = require('path');
 const fs = require('fs');
@@ -35,6 +36,7 @@ app.addExceptionHandler(UnauthorizedError, (req, res, err) => {
 // 4. Inclusión de Routers Modulares
 app.includeRouter(userRouter);
 app.includeRouter(itemRouter);
+app.includeRouter(vectorRouter);
 
 // 4.1 Endpoints nativos de Autenticación con js-doc-store
 const { auth, ensureAuthInit } = require('./dependencies/auth');

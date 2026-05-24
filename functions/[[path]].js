@@ -1,5 +1,6 @@
 import { FastAPI, APIRouter } from '../lib/fastapi-edge.js';
 import { DocStore, MemoryStorageAdapter, CloudflareKVAdapter, Auth } from '../lib/js-doc-store.js';
+import { VectorStore } from '../lib/js-vector-store.js';
 
 // 1. Inicializar la aplicación para Pages Functions
 const app = new FastAPI({
@@ -26,6 +27,7 @@ app.addMiddleware(async (request, env, ctx, next) => {
 let db;
 let auth;
 let authInitialized = false;
+let vectorDb;
 
 function ensureDbAndAuth(env) {
     if (!db) {
@@ -37,6 +39,13 @@ function ensureDbAndAuth(env) {
         auth = new Auth(db, {
             secret: env.API_SECRET_TOKEN || 'pages-secret-token'
         });
+    }
+    if (!vectorDb) {
+        if (env && env.MY_KV) {
+            vectorDb = new VectorStore(new CloudflareKVAdapter(env.MY_KV, 'vectors/'), 768);
+        } else {
+            vectorDb = new VectorStore(new MemoryStorageAdapter(), 768);
+        }
     }
 }
 

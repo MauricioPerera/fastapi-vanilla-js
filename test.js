@@ -4,20 +4,27 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-// Limpiar la base de datos de pruebas (.data/) antes de arrancar para asegurar consistencia
+// Limpiar la base de datos de pruebas (.data/) antes de arrancar para asegurar consistencia absoluta
 const dbPath = path.resolve(__dirname, '.data');
-if (fs.existsSync(dbPath)) {
-    const files = fs.readdirSync(dbPath);
-    for (const file of files) {
-        if (file.endsWith('.json')) {
-            try {
-                fs.unlinkSync(path.join(dbPath, file));
-            } catch (e) {
-                // Silencioso si no se puede borrar
+function deleteRecursive(dir) {
+    if (fs.existsSync(dir)) {
+        const list = fs.readdirSync(dir);
+        for (const file of list) {
+            const curPath = path.join(dir, file);
+            if (fs.lstatSync(curPath).isDirectory()) {
+                deleteRecursive(curPath);
+            } else {
+                try {
+                    fs.unlinkSync(curPath);
+                } catch (e) {}
             }
         }
+        try {
+            fs.rmdirSync(dir);
+        } catch (e) {}
     }
 }
+deleteRecursive(dbPath);
 
 // Esperar un breve momento para garantizar que el servidor principal en index.js se haya inicializado por completo en el puerto 8999
 const BASE_URL = 'http://localhost:8999';
@@ -213,6 +220,199 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         const body = await res.json();
         assert.strictEqual(body.usuario.email, "developer@test.com");
         assert.ok(body.items);
+    });
+    // --- NUEVAS PRUEBAS DE BASE DE DATOS VECTORIAL (js-vector-store) ---
+
+    // Generar vectores mocks distinguibles de 768d con dirección angular distinta
+    const makeVector = (val) => {
+        const vec = new Array(768).fill(0);
+        vec[0] = val;
+        vec[1] = 1 - val;
+        return vec;
+    };
+
+    // Test 13: Upsert de Vectores en el almacén persistente
+    await t.test('POST /vectors/upsert - Almacena embeddings reales con metadata en canal seguro', async () => {
+        // Obtenemos token para realizar peticiones seguras
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        // Upsert Vector 1 (Medicina y salud)
+        const res1 = await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                id: "med-1",
+                vector: makeVector(0.9),
+                metadata: { category: "medicina", tags: ["salud", "ia"] }
+            })
+        });
+        assert.strictEqual(res1.status, 200);
+        const body1 = await res1.json();
+        assert.strictEqual(body1.mensaje, "Vector indexado con éxito");
+        assert.strictEqual(body1.id, "med-1");
+
+        // Upsert Vector 2 (Tecnología y computación)
+        const res2 = await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                id: "tech-1",
+                vector: makeVector(0.2),
+                metadata: { category: "tecnología", tags: ["computadoras", "ia"] }
+            })
+        });
+        assert.strictEqual(res2.status, 200);
+    });
+
+    // Test 14: Búsqueda Semántica con similitud Coseno y filtros de metadatos
+    await t.test('POST /vectors/search - Realiza búsqueda semántica bruta y aplica filtros', async () => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        // Búsqueda sin filtros
+        const searchRes = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                vector: makeVector(0.95),
+                limit: 2,
+                metric: "cosine"
+            })
+        });
+        assert.strictEqual(searchRes.status, 200);
+        const searchBody = await searchRes.json();
+        assert.strictEqual(searchBody.resultados.length, 2);
+        assert.strictEqual(searchBody.resultados[0].id, "med-1"); // Por similitud de primer elemento (0.95 vs 0.9)
+
+        // Búsqueda con filtro de metadatos
+        const filteredRes = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                vector: makeVector(0.95),
+                limit: 2,
+                filter: { category: "tecnología" }
+            })
+        });
+        assert.strictEqual(filteredRes.status, 200);
+        const filteredBody = await filteredRes.json();
+        assert.strictEqual(filteredBody.resultados.length, 1);
+        assert.strictEqual(filteredBody.resultados[0].id, "tech-1");
+    });
+
+    // Test 15: Búsqueda Dimensional Matryoshka progresiva
+    await t.test('POST /vectors/search-matryoshka - Evalúa slices dimensionales progresivos', async () => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        const res = await fetch(`${BASE_URL}/vectors/search-matryoshka`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                vector: makeVector(0.85),
+                stages: [128, 384, 768],
+                limit: 1
+            })
+        });
+        assert.strictEqual(res.status, 200);
+        const body = await res.json();
+        assert.strictEqual(body.resultados.length, 1);
+        assert.strictEqual(body.resultados[0].id, "med-1");
+    });
+
+    // Test 16: Construcción de Índice IVF y búsqueda semántica indexada
+    await t.test('POST /vectors/build-index - Construye clúster K-means y busca de forma sub-lineal', async () => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        // Construir índice IVF
+        const buildRes = await fetch(`${BASE_URL}/vectors/build-index`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                numClusters: 2,
+                numProbes: 1
+            })
+        });
+        assert.strictEqual(buildRes.status, 200);
+        const buildBody = await buildRes.json();
+        assert.strictEqual(buildBody.mensaje, "Índice invertido IVF K-means construido con éxito");
+        assert.strictEqual(buildBody.clusters, 2);
+
+        // Búsqueda sobre el índice IVF construido
+        const searchRes = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "docs",
+                vector: makeVector(0.15),
+                limit: 1
+            })
+        });
+        assert.strictEqual(searchRes.status, 200);
+        const searchBody = await searchRes.json();
+        assert.strictEqual(searchBody.resultados.length, 1);
+        assert.strictEqual(searchBody.resultados[0].id, "tech-1"); // Más cercano a 0.15 (0.2 vs 0.9)
     });
 
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
