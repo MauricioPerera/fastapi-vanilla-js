@@ -147,8 +147,6 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
 
     // --- NUEVAS PRUEBAS DE INTEGRACIÓN PERSISTENTES (js-doc-store) ---
 
-    let realToken = '';
-
     // Test 10: Registrar un usuario real en la base de datos
     await t.test('POST /auth/register - Registra un usuario real con cifrado PBKDF2', async () => {
         const payload = {
@@ -188,14 +186,26 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(body.mensaje, "Login exitoso");
         assert.ok(body.token);
         assert.strictEqual(body.usuario.email, "developer@test.com");
-        realToken = body.token; // Guardar token para test posterior
     });
 
     // Test 12: Acceso a ruta segura usando el JWT real de js-doc-store
     await t.test('GET /items - Acceso exitoso usando JWT criptográfico real', async () => {
+        // Realizar login de forma independiente para garantizar aislamiento del test
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        assert.strictEqual(loginRes.status, 200);
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
         const res = await fetch(`${BASE_URL}/items`, {
             headers: {
-                'Authorization': `Bearer ${realToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         assert.strictEqual(res.status, 200);
