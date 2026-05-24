@@ -7,6 +7,7 @@
     "start": "node index.js",
     "mcp": "node mcp.js",
     "mcp:client": "node client.js",
+    "mcp:client:sse": "node client-sse.js",
     "test": "node run-all-tests.js",
     "test:node": "node test.js",
     "test:edge": "node test-edge.js",

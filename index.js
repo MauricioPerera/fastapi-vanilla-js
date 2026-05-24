@@ -36,6 +36,56 @@ app.addExceptionHandler(UnauthorizedError, (req, res, err) => {
 app.includeRouter(userRouter);
 app.includeRouter(itemRouter);
 
+// 4.5 Integración del Servidor Model Context Protocol (FastMCP) sobre HTTP/SSE
+const { FastMCP } = require('./lib/fastmcp');
+const mcp = new FastMCP("FastMCP-API-Toolkit-SSE", {
+    version: "2.0.0"
+});
+
+mcp.resource(
+    "sistema://estado",
+    "Estado Operativo del Sistema",
+    "Provee información sobre la versión del motor de ejecución, memoria reservada e hilos de procesamiento.",
+    "application/json",
+    async () => {
+        return {
+            plataforma: process.platform,
+            node_version: process.version,
+            memoria_rss: `${(process.memoryUsage().rss / 1024 / 1024).toFixed(2)} MB`,
+            uptime: `${process.uptime().toFixed(1)} segundos`,
+            pid: process.pid
+        };
+    }
+);
+
+mcp.tool(
+    "obtener_metricas",
+    "Obtiene estadísticas en tiempo real del uso de recursos del servidor Node.js.",
+    {
+        type: "object",
+        properties: {}
+    },
+    async () => {
+        const usage = process.memoryUsage();
+        return {
+            mensaje: "Métricas leídas exitosamente",
+            sistema: {
+                arquitectura: process.arch,
+                plataforma: process.platform,
+                tiempo_activo: `${process.uptime().toFixed(1)} segundos`
+            },
+            memoria: {
+                rss: `${(usage.rss / 1024 / 1024).toFixed(2)} MB`,
+                heapTotal: `${(usage.heapTotal / 1024 / 1024).toFixed(2)} MB`,
+                heapUsed: `${(usage.heapUsed / 1024 / 1024).toFixed(2)} MB`
+            }
+        };
+    }
+);
+
+// Vincular los endpoints SSE de FastMCP en la instancia de nuestra API
+mcp.setupSSE(app);
+
 // 5. Endpoint Raíz
 app.get('/', (req, res) => {
     return {
