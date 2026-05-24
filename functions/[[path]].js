@@ -284,8 +284,19 @@ app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
 
-// Ruta Raíz de la API REST
-app.get('/', (request) => {
+// Ruta Raíz de la API REST - Con negociación de contenido para servir la consola UI a navegadores
+app.get('/', async (request, env, ctx) => {
+    const accept = request.headers.get('accept') || '';
+    if (accept.includes('text/html') && env && env.ASSETS) {
+        try {
+            const assetResponse = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+            if (assetResponse.status === 200) {
+                return assetResponse;
+            }
+        } catch (e) {
+            console.error("Fallo al cargar index.html de ASSETS:", e.message);
+        }
+    }
     return {
         mensaje: "¡Bienvenido a FastAPI Pages Functions en Cloudflare!",
         documentacion: "/docs",
@@ -296,5 +307,14 @@ app.get('/', (request) => {
 // 5. EXPORTACIÓN DEL PUNTO DE ENTRADA EXCLUSIVO PARA CLOUDFLARE PAGES FUNCTIONS
 export async function onRequest(context) {
     const { request, env } = context;
-    return await app.handle(request, env, context);
+    const response = await app.handle(request, env, context);
+    if (response.status === 404) {
+        // En Cloudflare Pages, si la API no maneja la ruta, servimos el archivo estático correspondiente de env.ASSETS
+        const clone = request.clone();
+        const assetResponse = await env.ASSETS.fetch(clone);
+        if (assetResponse.status !== 404) {
+            return assetResponse;
+        }
+    }
+    return response;
 }
