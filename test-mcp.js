@@ -259,9 +259,38 @@ test('FastMCP (Model Context Protocol) E2E Integration Suite', async (t) => {
         assert.ok(Array.isArray(result.colecciones));
     });
 
+    // Test 11: Ejecución exitosa de una herramienta puenteada con inyección de dependencias (api_post_vectors_search)
+    await t.test('JSON-RPC tools/call (api_post_vectors_search) - Ejecuta herramienta de API puenteada y resuelve dependencias con éxito', async () => {
+        const callReq = {
+            jsonrpc: "2.0",
+            id: 11,
+            method: "tools/call",
+            params: {
+                name: "api_post_vectors_search",
+                arguments: {
+                    collection: "test-mcp-col",
+                    vector: new Array(768).fill(0.05),
+                    limit: 2
+                }
+            }
+        };
+
+        const res = await sendJsonRpc(callReq);
+        assert.strictEqual(res.jsonrpc, "2.0");
+        assert.strictEqual(res.id, 11);
+        assert.strictEqual(res.result.isError, false);
+
+        const textContent = res.result.content[0].text;
+        const result = JSON.parse(textContent);
+        assert.strictEqual(result.http_status, 200);
+        assert.strictEqual(result.success, true);
+        assert.ok(Array.isArray(result.response.resultados));
+    });
+
     // Al finalizar los subtests, apagar el subproceso mcp.js de forma limpia
     t.after(() => {
         mcpProcess.kill();
     });
 });
+
 
