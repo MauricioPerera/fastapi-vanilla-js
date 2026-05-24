@@ -23,7 +23,11 @@ itemRouter.post('/', (req, res, deps) => {
     });
     
     // Persiste en caliente al disco duro (.data/items.docs.json)
-    col.flush();
+    try {
+        col.flush();
+    } catch (err) {
+        return res.json({ detail: "Error al persistir el ítem", mensaje: err.message }, 500);
+    }
     
     return {
         mensaje: "Ítem guardado con éxito",

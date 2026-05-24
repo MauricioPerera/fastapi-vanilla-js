@@ -34,12 +34,14 @@ userRouter.get('/', (req, res) => {
 userRouter.get('/:id', (req, res) => {
     const id = req.params.id;
     
-    // Si el ID es puramente numérico, emular respuesta dinámica legacy
+    // Si el ID es puramente numérico, emular respuesta dinámica legacy con contrato consistente
     if (/^\d+$/.test(id)) {
         return {
+            _id: String(id),
             id: parseInt(id, 10),
-            name: `Usuario ${id}`,
             email: `user${id}@test.com`,
+            name: `Usuario ${id}`,
+            roles: ["user"],
             activo: true
         };
     }

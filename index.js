@@ -63,6 +63,16 @@ seedDatabase().catch(err => console.error("Error sembrando base de datos:", err)
 app.post('/auth/register', async (req, res) => {
     await ensureAuthInit();
     const { email, password, name } = req.body;
+    
+    // Validaciones nativas y seguras de formato y longitud
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+        return res.json({ detail: "Error en el registro", mensaje: "Formato de correo electrónico inválido" }, 400);
+    }
+    if (!password || password.length < 6) {
+        return res.json({ detail: "Error en el registro", mensaje: "La contraseña debe tener al menos 6 caracteres" }, 400);
+    }
+    
     try {
         const user = await auth.register(email, password, { name });
         return {
