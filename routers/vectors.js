@@ -68,6 +68,9 @@ vectorRouter.post('/search', (req, res, deps) => {
     
     let results;
     if (ivfIndex.hasIndex(collection)) {
+        // NOTA DE DISEÑO: Hacemos uso consciente del método de API privada `_loadIndex` 
+        // de js-vector-store.js para recuperar los metadatos serializados del índice IVF (como `numProbes`).
+        // Dado que la firma del método es interna, se documenta aquí en caso de futuras actualizaciones del motor.
         const idxData = ivfIndex._loadIndex(collection);
         if (idxData && idxData.numProbes) {
             ivfIndex.numProbes = idxData.numProbes;

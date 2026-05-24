@@ -31,8 +31,14 @@ const BASE_URL = 'http://localhost:8999';
 const app = require('./index');
 
 test('FastAPI Vanilla JS Integration Suite', async (t) => {
-    // Esperar un breve momento para garantizar que seedDatabase complete el sembrado e inicialización del hash PBKDF2
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Espera determinista y sin condiciones de carrera a que seedDatabase termine el sembrado de usuarios en segundo plano
+    const { auth, ensureAuthInit } = require('./dependencies/auth');
+    await ensureAuthInit();
+    let retries = 100;
+    while (retries > 0 && auth.listUsers().length < 2) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+        retries--;
+    }
     
     // Test 1: Endpoint raíz
     await t.test('GET / - Retorna mensaje de bienvenida e índices de endpoints', async () => {
