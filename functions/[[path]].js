@@ -81,6 +81,8 @@ const getEdgeStore = (req) => {
 
 const preloadVectorCol = async (store, col) => {
     if (store._adapter && typeof store._adapter.preload === 'function') {
+        // NOTE: Accesos conscientes a métodos privados (_jsonFile y _binFile) de js-vector-store.
+        // Se requieren para resolver los nombres de archivos físicos antes de la hidratación síncrona en memoria.
         const jsonFile = store._jsonFile(col);
         const binFile = store._binFile(col);
         await store._adapter.preload([jsonFile, binFile]);
