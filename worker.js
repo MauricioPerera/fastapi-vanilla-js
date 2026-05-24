@@ -69,9 +69,9 @@ async function ensureAuthInit(env) {
     }
 }
 
-// Helper para extraer la cuantización y resolver el almacén correspondiente
 const getEdgeStore = (req) => {
-    const q = req.body?.quantization || 'float32';
+    const urlObj = new URL(req.url);
+    const q = urlObj.searchParams.get('quantization') || req.body?.quantization || 'float32';
     const quantization = ['float32', 'int8', 'binary', 'polar'].includes(q) ? q : 'float32';
     return {
         store: stores[quantization],
@@ -182,10 +182,10 @@ vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
     const { store, quantization } = getEdgeStore(request);
     
     if (!collection || !id || !Array.isArray(vector)) {
-        return { detail: "Campos 'collection', 'id' y 'vector' son obligatorios", status_code: 400 };
+        return new Response(JSON.stringify({ detail: "Campos 'collection', 'id' y 'vector' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     if (vector.length !== store.dim) {
-        return { detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.`, status_code: 400 };
+        return new Response(JSON.stringify({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     
     store.set(collection, id, vector, metadata || {});
@@ -210,10 +210,10 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
     const { store, quantization } = getEdgeStore(request);
     
     if (!collection || !Array.isArray(vector)) {
-        return { detail: "Campos 'collection' y 'vector' son obligatorios", status_code: 400 };
+        return new Response(JSON.stringify({ detail: "Campos 'collection' y 'vector' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     if (vector.length !== store.dim) {
-        return { detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.`, status_code: 400 };
+        return new Response(JSON.stringify({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     
     const limitVal = limit || 5;
@@ -238,13 +238,9 @@ vectorRouter.post('/build-index', async (request, env, ctx, deps) => {
     const { collection } = request.body;
     const { quantization } = getEdgeStore(request);
     if (!collection) {
-        return { detail: "El campo 'collection' es obligatorio", status_code: 400 };
+        return new Response(JSON.stringify({ detail: "El campo 'collection' es obligatorio" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
-    return {
-        mensaje: "Índice invertido IVF K-means simulado en el Edge",
-        collection,
-        quantization
-    };
+    return new Response(JSON.stringify({ detail: "Índice invertido IVF K-means no está soportado en caliente en el Edge." }), { status: 501, headers: { 'Content-Type': 'application/json' } });
 });
 
 vectorRouter.get('/collections', async (request, env, ctx, deps) => {
@@ -271,7 +267,7 @@ vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
     const { store, quantization } = getEdgeStore(request);
     const cols = await store.listCollections();
     if (!cols.includes(col)) {
-        return { detail: `Colección vectorial '${col}' no encontrada en el Edge (${quantization})`, status_code: 404 };
+        return new Response(JSON.stringify({ detail: `Colección vectorial '${col}' no encontrada en el Edge (${quantization})` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
     store.drop(col);
     return {

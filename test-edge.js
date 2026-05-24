@@ -130,4 +130,75 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         assert.ok(body.detail.includes("Error de validación"));
         assert.ok(body.errors.some(e => e.includes("'ambiente' es obligatorio")));
     });
+
+    // Test 9: Vector endpoints - Upsert fallando por dimensiones inválidas
+    await t.test('POST /vectors/upsert - Falla con 400 si la dimensión del vector es incorrecta', async () => {
+        const req = new Request('http://localhost/vectors/upsert', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "test-col",
+                id: "vec-1",
+                vector: [0.1, 0.2] // Dimensión incorrecta (espera 1536 para float32)
+            })
+        });
+        const res = await worker.fetch(req, env, ctx);
+        
+        assert.strictEqual(res.status, 400);
+        const body = await res.json();
+        assert.ok(body.detail.includes("Dimensión de vector inválida"));
+    });
+
+    // Test 10: Vector endpoints - Build index no soportado en Edge
+    await t.test('POST /vectors/build-index - Retorna 501 (Not Implemented) en el Edge', async () => {
+        const req = new Request('http://localhost/vectors/build-index', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "test-col"
+            })
+        });
+        const res = await worker.fetch(req, env, ctx);
+        
+        assert.strictEqual(res.status, 501);
+        const body = await res.json();
+        assert.ok(body.detail.includes("no está soportado"));
+    });
+
+    // Test 11: Vector endpoints - Delete colección inexistente
+    await t.test('DELETE /vectors/collections/:name - Retorna 404 para colección no encontrada', async () => {
+        const req = new Request('http://localhost/vectors/collections/inexistente', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token'
+            }
+        });
+        const res = await worker.fetch(req, env, ctx);
+        
+        assert.strictEqual(res.status, 404);
+        const body = await res.json();
+        assert.ok(body.detail.includes("no encontrada"));
+    });
+
+    // Test 12: Vector endpoints - GET collections con quantization query param
+    await t.test('GET /vectors/collections?quantization=int8 - Lee quantization del query param', async () => {
+        const req = new Request('http://localhost/vectors/collections?quantization=int8', {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token'
+            }
+        });
+        const res = await worker.fetch(req, env, ctx);
+        
+        assert.strictEqual(res.status, 200);
+        const body = await res.json();
+        assert.strictEqual(body.quantization, 'int8');
+    });
 });
+
