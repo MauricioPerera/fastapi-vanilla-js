@@ -723,6 +723,51 @@
                     </table>
                 </div>
             </div>
+
+            <!-- CPT Relational Engine Manager -->
+            <div class="glass-box" style="margin-top: 24px;">
+                <div class="glass-box-header">
+                    <div class="glass-box-title">🔄 WordPress-style Custom Post Types & Relaciones</div>
+                    <div>
+                        <button class="btn" style="padding: 6px 14px; font-size: 12px;" onclick="openCptCreatorModal()">+ Registrar CPT</button>
+                        <button class="btn btn-outline" style="padding: 6px 14px; font-size: 12px;" onclick="loadCpts()">🔄 Recargar</button>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 20px; margin-top: 14px;">
+                    <!-- Left: CPT List -->
+                    <div style="background: rgba(0,0,0,0.15); border-radius: 8px; padding: 14px; border: 1px solid var(--border-glow); max-height: 400px; overflow-y: auto;">
+                        <h4 style="margin-top: 0; color: var(--text-glow); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; font-size: 14px;">Colecciones CPT</h4>
+                        <div id="cpt-menu-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Dynamically loaded CPT list -->
+                        </div>
+                    </div>
+
+                    <!-- Right: Dynamic Table Viewer -->
+                    <div id="cpt-viewer-panel" style="background: rgba(0,0,0,0.1); border-radius: 8px; padding: 14px; border: 1px solid var(--border-glow); display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+                            <h3 id="cpt-active-title" style="margin: 0; color: var(--cyan); font-size: 16px;">Colección: ...</h3>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <label style="font-size: 12px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" id="cpt-expand-relations-chk" onchange="loadCptDocuments()"> Expandir Relaciones (Populate)
+                                </label>
+                                <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="openAddCptRecordModal()">+ Nuevo Registro</button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="table" id="cpt-documents-table">
+                                <thead>
+                                    <!-- Dynamic headers depending on active CPT schema -->
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- VIEW: VECTORSTORE -->
@@ -897,6 +942,55 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- MODAL OVERLAY: CPT SCHEMA CREATOR -->
+    <div class="modal-overlay" id="cpt-creator-modal">
+        <div class="modal-box" style="max-width: 650px; background: #0f111a; border: 1px solid var(--accent);">
+            <div class="modal-box-header">
+                <h2>📐 Registrar Custom Post Type</h2>
+                <p>Define una nueva colección CPT con columnas dinámicas, tipado y referencias relacionales.</p>
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 16px;">
+                <label class="form-label">Nombre del CPT (Colección)</label>
+                <input type="text" class="form-control" id="cpt-new-name" placeholder="Ej: portafolio, eventos, conferencistas">
+            </div>
+
+            <div style="text-align: left; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label class="form-label" style="margin: 0;">Campos / Columnas del Esquema</label>
+                    <button class="btn" style="padding: 4px 10px; font-size: 11px;" onclick="addCptColumnRow()">+ Añadir Campo</button>
+                </div>
+                <div id="cpt-dynamic-columns" style="max-height: 250px; overflow-y: auto; padding-right: 4px; border: 1px solid rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.2);">
+                    <!-- Column input rows get rendered here dynamically -->
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeCptCreatorModal()">Cancelar</button>
+                <button class="btn" onclick="saveCptSchema()">Guardar CPT en Disco</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OVERLAY: ADD CPT RECORD -->
+    <div class="modal-overlay" id="cpt-record-modal">
+        <div class="modal-box" style="max-width: 500px; background: #0f111a; border: 1px solid var(--accent);">
+            <div class="modal-box-header">
+                <h2 id="cpt-record-modal-title">📝 Añadir Registro CPT</h2>
+                <p>Ingresa los valores respetando el tipado y restricciones del esquema de la colección.</p>
+            </div>
+            
+            <div id="cpt-record-form-fields" style="text-align: left; max-height: 350px; overflow-y: auto; padding-right: 4px;">
+                <!-- Dynamic form fields are loaded here based on schema columns -->
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button class="btn btn-outline" onclick="closeAddCptRecordModal()">Cancelar</button>
+                <button class="btn" onclick="saveCptRecord()">Insertar Registro</button>
+            </div>
+        </div>
     </div>
 
     <!-- MODAL OVERLAY: LOGIN -->
@@ -1138,6 +1232,8 @@
                 } else {
                     itemsTable.innerHTML = `<tr><td colspan="4" style="text-align: center;">No hay artículos registrados en caliente.</td></tr>`;
                 }
+                
+                await loadCpts();
             } catch (err) {
                 console.error("Fallo al cargar base de datos:", err);
             }
@@ -1639,6 +1735,346 @@
                 
                 updateMetricsDirectly();
             });
+        }
+
+        function loadFastMcpData() {
+            connectMcpSse();
+        }
+
+        // ============================================================================
+        // 🔄 WORDPRESS-STYLE CPT & RELATIONAL MANAGEMENT ENGINE
+        // ============================================================================
+        let activeCptName = null;
+        let activeCptColumns = [];
+
+        async function loadCpts() {
+            try {
+                const res = await fetch('/cpts/schemas', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                const data = await res.json();
+                const menuList = document.getElementById('cpt-menu-list');
+                menuList.innerHTML = '';
+                
+                if (data.cpts && data.cpts.length > 0) {
+                    data.cpts.forEach(cpt => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-outline';
+                        btn.style.textAlign = 'left';
+                        btn.style.width = '100%';
+                        btn.style.justifyContent = 'flex-start';
+                        btn.style.marginBottom = '6px';
+                        btn.innerHTML = `📂 ${cpt.name} <span style="font-size:10px; color:#aaa; margin-left:auto;">(${cpt.columns.length} campos)</span>`;
+                        btn.onclick = () => selectCpt(cpt.name, cpt.columns);
+                        menuList.appendChild(btn);
+                    });
+                } else {
+                    menuList.innerHTML = '<div style="font-size:12px; color:#aaa; text-align:center; padding:10px;">Ningún CPT registrado.</div>';
+                }
+            } catch (err) {
+                console.error("Error cargando CPTs:", err);
+            }
+        }
+
+        function selectCpt(name, columns) {
+            activeCptName = name;
+            activeCptColumns = columns;
+            document.getElementById('cpt-viewer-panel').style.display = 'block';
+            document.getElementById('cpt-active-title').innerText = `Colección: ${name}`;
+            loadCptDocuments();
+        }
+
+        async function loadCptDocuments() {
+            if (!activeCptName) return;
+            const expand = document.getElementById('cpt-expand-relations-chk').checked;
+            
+            try {
+                const res = await fetch(`/cpts/${activeCptName}?expand=${expand}`, {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                const data = await res.json();
+                
+                const tableHead = document.querySelector('#cpt-documents-table thead');
+                const tableBody = document.querySelector('#cpt-documents-table tbody');
+                tableHead.innerHTML = '';
+                tableBody.innerHTML = '';
+
+                if (!data.documentos) return;
+
+                // 1. Render Headers
+                let headersHtml = '<tr><th>ID</th>';
+                activeCptColumns.forEach(col => {
+                    headersHtml += `<th>${col.name} <span style="font-size:9px; color:#888;">(${col.type})</span></th>`;
+                });
+                headersHtml += '<th>Acciones</th></tr>';
+                tableHead.innerHTML = headersHtml;
+
+                // 2. Render Rows
+                if (data.documentos.length > 0) {
+                    data.documentos.forEach(doc => {
+                        let rowHtml = `<tr><td style="font-weight:600; color:var(--cyan); font-size:12px;">${doc._id}</td>`;
+                        
+                        activeCptColumns.forEach(col => {
+                            const val = doc[col.name];
+                            if (col.type === 'relation') {
+                                if (expand && val && typeof val === 'object') {
+                                    const desc = val.nombre || val.titulo || val.name || JSON.stringify(val);
+                                    rowHtml += `<td><span class="badge badge-accent" style="background: rgba(139,92,246,0.15); padding: 2px 6px; border-radius: 4px; font-size: 11px; color: var(--accent);">🔗 ${desc}</span></td>`;
+                                } else {
+                                    rowHtml += `<td><span style="font-family:monospace; font-size:11px;">${val || '--'}</span></td>`;
+                                }
+                            } else if (col.type === 'checkbox') {
+                                rowHtml += `<td>${val ? '<span style="color:var(--success);">Sí</span>' : 'No'}</td>`;
+                            } else {
+                                rowHtml += `<td>${val !== undefined ? val : '--'}</td>`;
+                            }
+                        });
+
+                        rowHtml += `<td><button class="btn btn-outline" style="padding: 2px 8px; font-size:10px; color:var(--danger); border-color:rgba(239,68,68,0.2);" onclick="deleteCptRecord('${doc._id}')">Borrar</button></td></tr>`;
+                        tableBody.innerHTML += rowHtml;
+                    });
+                } else {
+                    tableBody.innerHTML = `<tr><td colspan="${activeCptColumns.length + 2}" style="text-align: center;">Sin registros en esta colección CPT.</td></tr>`;
+                }
+            } catch (err) {
+                console.error("Error cargando documentos CPT:", err);
+            }
+        }
+
+        function openCptCreatorModal() {
+            document.getElementById('cpt-creator-modal').classList.add('active');
+            document.getElementById('cpt-dynamic-columns').innerHTML = '';
+            addCptColumnRow();
+        }
+
+        function closeCptCreatorModal() {
+            document.getElementById('cpt-creator-modal').classList.remove('active');
+        }
+
+        function addCptColumnRow() {
+            const container = document.getElementById('cpt-dynamic-columns');
+            const row = document.createElement('div');
+            row.className = 'cpt-column-input-row';
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = '2fr 2fr 1fr 1.5fr auto';
+            row.style.gap = '8px';
+            row.style.marginBottom = '8px';
+            row.style.alignItems = 'center';
+
+            row.innerHTML = `
+                <input type="text" class="form-control column-name" placeholder="Nombre Campo" style="padding:6px; font-size:12px; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">
+                <select class="form-control column-type" style="padding:6px; font-size:12px; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;" onchange="handleColumnTypeChange(this)">
+                    <option value="text">Texto</option>
+                    <option value="number">Número</option>
+                    <option value="checkbox">Checkbox (Booleano)</option>
+                    <option value="select">Selección (Select)</option>
+                    <option value="relation">Relación (🔗 CPT)</option>
+                </select>
+                <label style="font-size:11px; display:flex; gap:4px; align-items:center; cursor:pointer;">
+                    <input type="checkbox" class="column-req"> Req
+                </label>
+                <div class="column-extra-container" style="font-size:11px;">
+                    <!-- Configuración adicional dinámica -->
+                </div>
+                <button class="btn btn-outline" style="color:var(--danger); border-color:transparent; padding: 4px 8px; font-size: 12px;" onclick="this.parentElement.remove()">✕</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function handleColumnTypeChange(selectElement) {
+            const container = selectElement.parentElement.querySelector('.column-extra-container');
+            container.innerHTML = '';
+            const type = selectElement.value;
+            
+            if (type === 'select') {
+                container.innerHTML = `<input type="text" class="form-control column-opts" placeholder="opciones (a,b,c)" style="padding:4px; font-size:10px; height: 26px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+            } else if (type === 'relation') {
+                container.innerHTML = `<input type="text" class="form-control column-target" placeholder="CPT Destino" style="padding:4px; font-size:10px; height: 26px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+            }
+        }
+
+        async function saveCptSchema() {
+            const name = document.getElementById('cpt-new-name').value.trim();
+            if (!name) {
+                alert("Nombre del CPT es obligatorio");
+                return;
+            }
+
+            const columnRows = document.querySelectorAll('.cpt-column-input-row');
+            const columns = [];
+
+            let isValid = true;
+            columnRows.forEach(row => {
+                const fieldName = row.querySelector('.column-name').value.trim();
+                const type = row.querySelector('.column-type').value;
+                const required = row.querySelector('.column-req').checked;
+
+                if (!fieldName) {
+                    isValid = false;
+                    return;
+                }
+
+                const colDef = { name: fieldName, type, required };
+
+                if (type === 'select') {
+                    const optsEl = row.querySelector('.column-opts');
+                    const optsVal = optsEl ? optsEl.value : '';
+                    colDef.options = optsVal.split(',').map(o => o.trim()).filter(Boolean);
+                } else if (type === 'relation') {
+                    const targetEl = row.querySelector('.column-target');
+                    const targetVal = targetEl ? targetEl.value.trim() : '';
+                    if (!targetVal) {
+                        isValid = false;
+                        alert(`Relación de columna '${fieldName}' requiere el CPT destino.`);
+                        return;
+                    }
+                    colDef.collection = targetVal;
+                }
+
+                columns.push(colDef);
+            });
+
+            if (!isValid || columns.length === 0) {
+                alert("Debe registrar al menos un campo con nombre.");
+                return;
+            }
+
+            try {
+                const res = await fetch('/cpts/schemas', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, columns })
+                });
+
+                if (res.status === 200) {
+                    closeCptCreatorModal();
+                    loadCpts();
+                    document.getElementById('cpt-new-name').value = '';
+                } else {
+                    const data = await res.json();
+                    alert(`Error al guardar: ${data.detail}`);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function openAddCptRecordModal() {
+            if (!activeCptName) return;
+            const container = document.getElementById('cpt-record-form-fields');
+            container.innerHTML = '';
+            document.getElementById('cpt-record-modal-title').innerText = `Añadir Registro: ${activeCptName}`;
+            
+            for (const col of activeCptColumns) {
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+                formGroup.style.marginBottom = '12px';
+
+                let inputHtml = `<label class="form-label">${col.name} ${col.required ? '<span style="color:var(--danger)">*</span>' : ''} <span style="font-size:10px; color:#888;">(${col.type})</span></label>`;
+                
+                if (col.type === 'checkbox') {
+                    inputHtml = `
+                        <label style="display:flex; gap:8px; align-items:center; cursor:pointer;" class="form-label">
+                            <input type="checkbox" id="cpt-field-${col.name}"> ${col.name} ${col.required ? '<span style="color:var(--danger)">*</span>' : ''}
+                        </label>
+                    `;
+                } else if (col.type === 'select') {
+                    let optsHtml = '';
+                    if (col.options) {
+                        col.options.forEach(opt => {
+                            optsHtml += `<option value="${opt}">${opt}</option>`;
+                        });
+                    }
+                    inputHtml += `<select class="form-control" id="cpt-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">${optsHtml}</select>`;
+                } else if (col.type === 'relation') {
+                    let dropdownOpts = '<option value="">-- Seleccionar Relación --</option>';
+                    try {
+                        const rRes = await fetch(`/cpts/${col.collection}`, {
+                            headers: { 'Authorization': `Bearer ${jwtToken}` }
+                        });
+                        if (rRes.status === 200) {
+                            const rData = await rRes.json();
+                            if (rData.documentos && rData.documentos.length > 0) {
+                                rData.documentos.forEach(doc => {
+                                    const display = doc.nombre || doc.titulo || doc.name || doc._id;
+                                    dropdownOpts += `<option value="${doc._id}">${display} (${doc._id})</option>`;
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Fallo cargando relaciones:", e);
+                    }
+                    inputHtml += `<select class="form-control" id="cpt-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">${dropdownOpts}</select>`;
+                } else if (col.type === 'number') {
+                    inputHtml += `<input type="number" class="form-control" id="cpt-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                } else {
+                    inputHtml += `<input type="text" class="form-control" id="cpt-field-${col.name}" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-glow); color: #fff;">`;
+                }
+
+                formGroup.innerHTML = inputHtml;
+                container.appendChild(formGroup);
+            }
+
+            document.getElementById('cpt-record-modal').classList.add('active');
+        }
+
+        function closeAddCptRecordModal() {
+            document.getElementById('cpt-record-modal').classList.remove('active');
+        }
+
+        async function saveCptRecord() {
+            const body = {};
+            activeCptColumns.forEach(col => {
+                const element = document.getElementById(`cpt-field-${col.name}`);
+                if (!element) return;
+                
+                if (col.type === 'checkbox') {
+                    body[col.name] = element.checked;
+                } else if (col.type === 'number') {
+                    body[col.name] = element.value === '' ? undefined : Number(element.value);
+                } else {
+                    body[col.name] = element.value;
+                }
+            });
+
+            try {
+                const res = await fetch(`/cpts/${activeCptName}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (res.status === 200) {
+                    closeAddCptRecordModal();
+                    loadCptDocuments();
+                } else {
+                    const data = await res.json();
+                    alert(`Error de validación: ${data.detail}`);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function deleteCptRecord(id) {
+            if (!confirm(`¿Estás seguro de eliminar el registro '${id}'?`)) return;
+            try {
+                const res = await fetch(`/cpts/${activeCptName}/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.status === 200) {
+                    loadCptDocuments();
+                }
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         function loadFastMcpData() {
