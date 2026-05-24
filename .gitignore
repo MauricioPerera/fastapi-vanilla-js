@@ -1,0 +1,22 @@
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Entornos y temporales
+.env
+.env.local
+.env.*.local
+tmp/
+temp/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Cobertura de pruebas
+coverage/
+.nyc_output/

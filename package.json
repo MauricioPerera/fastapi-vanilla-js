@@ -1,0 +1,21 @@
+{
+  "name": "fastapi-vanilla-js",
+  "version": "2.0.0",
+  "description": "Zero-dependency production modular microframework in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node run-all-tests.js",
+    "test:node": "node test.js",
+    "test:edge": "node test-edge.js"
+  },
+  "keywords": [
+    "fastapi",
+    "vanilla-js",
+    "zero-dependencies",
+    "microframework",
+    "high-performance"
+  ],
+  "author": "Antigravity AI",
+  "license": "MIT"
+}
