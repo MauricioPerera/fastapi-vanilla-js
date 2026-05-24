@@ -157,6 +157,35 @@ async function runSseClient() {
             console.log(`\x1b[32m[Server ➡ Client] Contenido del Recurso SSE "sistema://estado":\x1b[0m`);
             console.log(readRes.result.contents[0].text);
 
+            // --- 4. INVOCAR HERRAMIENTA guardar_log ---
+            const logRes = await sendPostRequest({
+                jsonrpc: "2.0",
+                id: 88888,
+                method: "tools/call",
+                params: {
+                    name: "guardar_log",
+                    arguments: {
+                        evento: "SSE_CLIENT_TEST",
+                        detalles: "Ejecución de test de red interactivo sobre HTTP/SSE"
+                    }
+                }
+            });
+            console.log(`\x1b[32m[Server ➡ Client] Resultado del Tool SSE "guardar_log":\x1b[0m`);
+            console.log(logRes.result.content[0].text);
+
+            // --- 5. OBTENER PROMPT explicar_mcp ---
+            const promptRes = await sendPostRequest({
+                jsonrpc: "2.0",
+                id: 99999,
+                method: "prompts/get",
+                params: {
+                    name: "explicar_mcp",
+                    arguments: {}
+                }
+            });
+            console.log(`\x1b[32m[Server ➡ Client] Contenido del Prompt SSE "explicar_mcp":\x1b[0m`);
+            console.log(promptRes.result.messages[0].content.text);
+
         } catch (e) {
             console.error(`\x1b[31m[Client Error] Fallo crítico durante la secuencia de red: ${e.message}\x1b[0m`);
         } finally {
