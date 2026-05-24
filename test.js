@@ -31,6 +31,8 @@ const BASE_URL = 'http://localhost:8999';
 const app = require('./index');
 
 test('FastAPI Vanilla JS Integration Suite', async (t) => {
+    // Esperar un breve momento para garantizar que seedDatabase complete el sembrado e inicialización del hash PBKDF2
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Test 1: Endpoint raíz
     await t.test('GET / - Retorna mensaje de bienvenida e índices de endpoints', async () => {

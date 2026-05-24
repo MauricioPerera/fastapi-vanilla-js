@@ -1,6 +1,10 @@
 const { APIRouter } = require('../lib/fastapi');
 const { getCurrentUser } = require('../dependencies/auth');
 const vectorDb = require('../dependencies/vector');
+const { IVFIndex } = require('../lib/js-vector-store');
+
+// Instancia singleton compartida de IVFIndex
+const ivfIndex = new IVFIndex(vectorDb);
 
 const vectorRouter = new APIRouter({
     prefix: '/vectors',
@@ -17,8 +21,18 @@ vectorRouter.post('/upsert', (req, res, deps) => {
     if (vector.length !== vectorDb.dim) {
         return res.json({ detail: `Dimensión de vector inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
     }
+    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
+        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
+    }
+    
     vectorDb.set(collection, id, vector, metadata || {});
-    vectorDb.flush();
+    
+    try {
+        vectorDb.flush();
+    } catch (err) {
+        return res.json({ detail: "Error al persistir el vector en disco", mensaje: err.message }, 500);
+    }
+    
     return {
         mensaje: "Vector indexado con éxito",
         collection,
@@ -44,21 +58,21 @@ vectorRouter.post('/search', (req, res, deps) => {
     if (vector.length !== vectorDb.dim) {
         return res.json({ detail: `Dimensión de vector inválida. Se espera ${vectorDb.dim} dimensiones.` }, 400);
     }
+    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
+        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
+    }
     
     const limitVal = limit || 5;
     const metricVal = metric || 'cosine';
     const sliceVal = dimSlice || 0;
     
-    const { IVFIndex } = require('../lib/js-vector-store');
-    const ivf = new IVFIndex(vectorDb);
-    
     let results;
-    if (ivf.hasIndex(collection)) {
-        const idxData = ivf._loadIndex(collection);
+    if (ivfIndex.hasIndex(collection)) {
+        const idxData = ivfIndex._loadIndex(collection);
         if (idxData && idxData.numProbes) {
-            ivf.numProbes = idxData.numProbes;
+            ivfIndex.numProbes = idxData.numProbes;
         }
-        results = ivf.search(collection, vector, limitVal);
+        results = ivfIndex.search(collection, vector, limitVal);
     } else {
         results = vectorDb.search(collection, vector, limitVal, sliceVal, metricVal, filter);
     }
@@ -140,15 +154,15 @@ vectorRouter.post('/build-index', (req, res, deps) => {
         return res.json({ detail: "El campo 'collection' es obligatorio" }, 400);
     }
     
-    const { IVFIndex } = require('../lib/js-vector-store');
     const count = vectorDb.count(collection);
     
     // Configuración heurística inteligente de clusters (K ≈ sqrt(N))
     const k = numClusters || Math.max(2, Math.round(Math.sqrt(count)));
     const p = numProbes || Math.max(1, Math.round(k * 0.2));
     
-    const ivf = new IVFIndex(vectorDb, k, p);
-    ivf.build(collection);
+    ivfIndex.numClusters = k;
+    ivfIndex.numProbes = p;
+    ivfIndex.build(collection);
     
     return {
         mensaje: "Índice invertido IVF K-means construido con éxito",
@@ -187,8 +201,12 @@ vectorRouter.get('/stats', (req, res, deps) => {
 });
 
 // 8. Eliminar Colección Vectorial
-vectorRouter.delete('/collections/:name', (req, res, deps) => {
+vectorRouter.delete('/collections/:name', async (req, res, deps) => {
     const col = req.params.name;
+    const cols = await vectorDb.listCollections();
+    if (!cols.includes(col)) {
+        return res.json({ detail: `Colección vectorial '${col}' no encontrada` }, 404);
+    }
     vectorDb.drop(col);
     return {
         mensaje: `Colección vectorial '${col}' eliminada con éxito`
