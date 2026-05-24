@@ -767,11 +767,39 @@ cptRouter.delete('/:collection/:id', async (request, env, ctx, deps) => {
     }
 });
 
+// ROUTER DE IA CHAT (/chat)
+// ----------------------------------------------------------------------------
+const chatRouter = new APIRouter({
+    prefix: "/chat",
+    tags: ["IA Chat"],
+    dependencies: { user: getEdgeUser }
+});
+
+chatRouter.post('/copilot', async (request, env, ctx, deps) => {
+    const { messages } = request.body;
+    if (!Array.isArray(messages)) {
+        return new Response(JSON.stringify({ detail: "Campo 'messages' es obligatorio y debe ser un array" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (!env || !env.AI) {
+        return new Response(JSON.stringify({ detail: "Workers AI binding ('AI') no configurado en este ambiente." }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+    }
+    try {
+        const aiRes = await env.AI.run('@cf/ibm-granite/granite-4.0-h-micro', { messages });
+        return {
+            mensaje: "Generación de texto completada usando IBM Granite 4.0 Micro en el Edge",
+            resultado: aiRes
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al invocar IBM Granite en Workers AI", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
 // Incluir Routers en la App
 app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
 app.includeRouter(cptRouter);
+app.includeRouter(chatRouter);
 
 // ----------------------------------------------------------------------------
 // ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)

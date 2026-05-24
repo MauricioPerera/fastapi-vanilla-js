@@ -8,6 +8,7 @@
     "/auth*",
     "/vectors*",
     "/cpts*",
+    "/chat*",
     "/sse*",
     "/message*"
   ],

@@ -1,0 +1,5 @@
+name = "fastapi-vanilla-js-perera"
+pages_build_output_dir = "public"
+
+[ai]
+binding = "AI"

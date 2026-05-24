@@ -3,6 +3,7 @@ const userRouter = require('./routers/users');
 const itemRouter = require('./routers/items');
 const vectorRouter = require('./routers/vectors');
 const cptRouter = require('./routers/cpts');
+const chatRouter = require('./routers/chat');
 const { UnauthorizedError } = require('./dependencies/auth');
 const path = require('path');
 const fs = require('fs');
@@ -39,6 +40,7 @@ app.includeRouter(userRouter);
 app.includeRouter(itemRouter);
 app.includeRouter(vectorRouter);
 app.includeRouter(cptRouter);
+app.includeRouter(chatRouter);
 
 // 4.1 Endpoints nativos de Autenticación con js-doc-store
 const { auth, ensureAuthInit } = require('./dependencies/auth');

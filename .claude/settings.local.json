@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node run-all-tests.js)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}
