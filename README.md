@@ -1,112 +1,135 @@
-# FastAPI Vanilla JS (Híbrido Node.js & Cloudflare Edge)
+# FastAPI & FastMCP Vanilla JS (Toolkit Híbrido)
 
-Una reinterpretación **Clean Room** de la arquitectura y pilares de **FastAPI** implementada en **Vanilla JavaScript** con **cero dependencias externas**.
+Una reinterpretación **Clean Room** y unificada de las arquitecturas declarativas de **FastAPI** y **FastMCP** (PrefectHQ) implementadas en **Vanilla JavaScript** con **cero dependencias externas**.
 
-Este framework híbrido te permite escribir APIs modulares y autodescriptivas que pueden ejecutarse tanto en servidores tradicionales (**Node.js**) como en plataformas perimetrales globales (**Cloudflare Workers / Pages Functions**) con un inicio en frío instantáneo (<1ms).
+Este toolkit híbrido te permite escribir microservicios de alto rendimiento que funcionan simultáneamente como:
+1.  **REST API local (Node.js)**: Servidor HTTP nativo con routers modulares y archivos estáticos.
+2.  **Edge Serverless API (Cloudflare)**: Compatible con el motor V8 de Cloudflare Workers y Pages Functions.
+3.  **Model Context Protocol Server (Stdio & SSE)**: Servidor de Inteligencia Artificial compatible con Claude Desktop para inyectar herramientas, recursos y plantillas locales.
 
 ---
 
 ## ✨ Características Principales
 
-*   **Cero Dependencias (`0 node_modules`)**: 100% auditable, libre de riesgos de seguridad en la cadena de suministro y huella de memoria ultra-reducida (~15MB-30MB).
-*   **Enrutamiento Dinámico Modular (`APIRouter`)**: Divide tu aplicación en múltiples controladores limpios con herencia de prefijos, dependencias comunes y etiquetas OpenAPI.
-*   **Validación de Esquemas Integrada**: Motor ligero de validación y coerción automática de tipos de datos en parámetros Query y Body (Pydantic-like).
-*   **Inyección de Dependencias Asíncrona (`Depends`)**: Lógica declarativa para validación de seguridad, conexiones a bases de datos y orquestación de servicios.
-*   **Swagger UI y OpenAPI Nativo**: Generación dinámica en tiempo de ejecución del esquema OpenAPI 3.0.0 y servicio interactivo de Swagger UI en `/docs` servido de forma segura desde CDN.
-*   **Middlewares y CORS**: Tubería de middlewares asíncronos y soporte CORS nativo flexible.
-*   **Servidor de Estáticos**: Capacidad de servir directorios físicos locales de forma asíncrona y segura contra vulnerabilidades de *Directory Traversal*.
+*   **Cero Dependencias (`0 node_modules`)**: 100% auditable, inmune a ataques de la cadena de suministro y huella de memoria ínfima (~15MB-30MB).
+*   **APIRouter Modular**: Divide tu aplicación en subcontroladores limpios con herencia de prefijos, dependencias comunes y etiquetas OpenAPI.
+*   **Validación de Esquemas (Pydantic-like)**: Motor ligero de validación y coerción automática de tipos de datos en parámetros Query y Body.
+*   **Inyección de Dependencias Asíncrona (`Depends`)**: Lógica declarativa para autenticación de seguridad, logs y orquestación de servicios.
+*   **Swagger UI y OpenAPI Nativo**: Generación dinámica en tiempo de ejecución de especificaciones OpenAPI 3.0.0 y servicio de Swagger UI en `/docs` desde CDN.
+*   **Conectividad MCP Dual**:
+    *   **Transporte STDIO**: Intercambio JSON-RPC 2.0 delimitado por saltos de línea (`\n`) para subprocesos locales con logs seguros a `stderr`.
+    *   **Transporte SSE (Server-Sent Events)**: Servidor de red en caliente que mapea eventos continuos del servidor y peticiones HTTP `POST` bajo el mismo puerto.
+*   **Servidor de Estáticos Nativo**: Carga asíncrona segura contra vulnerabilidades de *Directory Traversal*.
 
 ---
 
 ## 📂 Estructura del Proyecto
 
 ```text
-├── package.json             # Scripts npm y configuraciones básicas.
-├── Dockerfile               # Receta Alpine optimizada para producción Node.js.
-├── index.js                 # Entrada principal del servidor local en Node.js.
+├── package.json             # Configuración NPM y scripts del toolkit.
+├── Dockerfile               # Empaquetado ligero para producción Node.js.
+├── index.js                 # Entrada principal del Servidor local Node.js (REST + MCP SSE).
 ├── worker.js                # Entrada principal (ESM) para Cloudflare Workers.
-├── run-all-tests.js         # Orquestador unificado de batería de pruebas.
-├── test.js                  # Suite de pruebas de integración nativas para Node.js.
-├── test-edge.js             # Suite de pruebas de integración nativas para Cloudflare.
+├── mcp.js                   # Entrada principal del Servidor MCP local (stdio).
+├── client.js                # Cliente de pruebas interactivo para el MCP local (stdio).
+├── client-sse.js            # Cliente de pruebas interactivo para el MCP de red (SSE/HTTP).
+├── run-all-tests.js         # Orquestador unificado de las baterías de pruebas.
+├── test.js                  # Suite de pruebas nativas para el Servidor REST local.
+├── test-edge.js             # Suite de pruebas nativas para el Edge Worker.
+├── test-mcp.js              # Suite de pruebas nativas para el Servidor MCP (stdio).
 ├── lib/
-│   ├── fastapi.js           # Núcleo del framework para Node.js.
-│   └── fastapi-edge.js      # Núcleo del framework para V8 Edge.
+│   ├── fastapi.js           # Núcleo del microframework API para Node.js.
+│   ├── fastapi-edge.js      # Núcleo del microframework API para el Edge.
+│   └── fastmcp.js           # Núcleo del microframework Model Context Protocol (stdio/SSE).
 ├── schemas/
-│   └── item.schema.js       # Esquemas de validación declarativos.
+│   └── item.schema.js       # Esquemas de validación de datos.
 ├── dependencies/
 │   └── auth.js              # Resolvedores de inyección de dependencias de seguridad.
-└── routers/
-    ├── users.js             # Enrutador modular de recursos /users.
-    └── items.js             # Enrutador modular seguro para recursos /items.
+├── routers/
+│   ├── users.js             # Enrutador modular de /users.
+│   └── items.js             # Enrutador modular seguro de /items.
+└── functions/
+    └── [[path]].js          # Enrutador comodín para Cloudflare Pages Functions.
 ```
 
 ---
 
-## 🚀 Guía de Inicio Rápido (Servidor Node.js)
+## 🚀 Guía de Inicio Rápido
 
-### 1. Iniciar el Servidor
-Ejecuta la API directamente con Node.js en el puerto predeterminado (8000) o asignando la variable de entorno `PORT`:
+### A. Servidor de Producción Local (REST API & MCP SSE)
+Inicia el servidor híbrido que levanta la API REST tradicional y el canal de red MCP SSE en el mismo puerto (8000):
 ```bash
-node index.js
+npm start
 ```
-
-### 2. Endpoints Disponibles
-*   **Swagger UI Interactivo**: `http://localhost:8000/docs`
-*   **Esquema OpenAPI JSON**: `http://localhost:8000/openapi.json`
-*   **Página HTML Estática**: `http://localhost:8000/static/index.html`
+*   **Swagger UI**: `http://localhost:8000/docs`
+*   **Esquema OpenAPI**: `http://localhost:8000/openapi.json`
+*   **Estáticos Locales**: `http://localhost:8000/static/index.html`
+*   **Streaming SSE (MCP)**: `http://localhost:8000/sse`
 
 ---
 
-## ⚡ Guía de Inicio Rápido (Cloudflare Workers / Edge)
-
-La versión Edge utiliza estándares Web (`Request`, `Response`, `URL`) haciéndola compatible con el motor V8 de Cloudflare.
-
-### Ejemplo de Enrutador en el Edge:
-```javascript
-import { FastAPI, APIRouter } from './lib/fastapi-edge.js';
-
-const app = new FastAPI({ cors: true });
-const router = new APIRouter({ prefix: "/products" });
-
-router.get('/', () => {
-    return { status: "OK", items: [] };
-});
-
-app.includeRouter(router);
-
-export default {
-    async fetch(request, env, ctx) {
-        return await app.handle(request, env, ctx);
+### B. Servidor MCP Local por Stdio (Claude Desktop)
+Para que clientes de IA ejecuten el servidor localmente como subproceso stdio:
+```bash
+npm run mcp
+```
+Para integrarlo directamente en tu cliente de **Claude Desktop**:
+1. Abre `%APPDATA%\Claude\claude_desktop_config.json`.
+2. Agrega el servidor en `"mcpServers"` configurando la ruta absoluta a tu archivo:
+```json
+{
+  "mcpServers": {
+    "api-mcp-toolkit": {
+      "command": "node",
+      "args": ["D:/repos/api/mcp.js"]
     }
-};
+  }
+}
 ```
 
 ---
 
-## 📊 Batería de Pruebas Nativa
+### C. Despliegue en Cloudflare Pages
+1.  **Crear el proyecto en tu cuenta de Cloudflare**:
+    ```bash
+    npx wrangler pages project create fastapi-vanilla-js --production-branch master
+    ```
+2.  **Compilar y Desplegar**:
+    Wrangler empaquetará el directorio estático `public/` y compilará dinámicamente tu API comodín de `/functions` a velocidad Edge:
+    ```bash
+    npx wrangler pages deploy public --project-name=fastapi-vanilla-js --branch=master --commit-dirty=true
+    ```
+    *Enlace de producción asignado*: `https://fastapi-vanilla-js.pages.dev`
 
-El proyecto incorpora un cargador secuencial que ejecuta las pruebas automatizadas de ambas arquitecturas (Node y Edge) usando el test runner nativo de Node.js (`node:test`) sin añadir frameworks externos de pruebas.
+---
 
-Para ejecutar la batería completa:
+## 📊 Ejecución de Pruebas y Clientes Interactivos
+
+El toolkit incluye baterías completas de pruebas automatizadas nativas y clientes locales interactivos para verificar cada componente de red de forma local.
+
+### 1. Batería Completa de Tests
+Ejecuta las **27 pruebas de integración nativas** de forma secuencial:
 ```bash
-node run-all-tests.js
+npm test
 ```
+*   **Suite Node.js** (`test.js`): 10/10 aprobados.
+*   **Suite Edge Cloudflare** (`test-edge.js`): 9/9 aprobados.
+*   **Suite FastMCP Server** (`test-mcp.js`): 8/8 aprobados.
 
-### Resultados Validados:
-1.  **GET /**: 200 OK con índices.
-2.  **GET /openapi.json**: Valida esquema OpenAPI 3.0 auto-generado.
-3.  **GET /users**: Validación de parámetros Query por defecto.
-4.  **GET /users/:id**: Extracción dinámica de ruta.
-5.  **GET /static/index.html**: Servicio asíncrono seguro de archivos estáticos.
-6.  **GET /items (Bloqueo)**: Retorna 401 si falta Token Bearer.
-7.  **GET /items (Acceso)**: 200 OK bajo autenticación exitosa.
-8.  **POST /items (Falla)**: Retorna 400 por validación de campos obligatorios faltantes.
-9.  **POST /items (Éxito)**: Crea recurso exitosamente.
+### 2. Clientes Interactivos de Prueba
+*   **Cliente Local Stdio**: Simula el intercambio de tramas JSON-RPC línea a línea tal y como lo haría Claude Desktop:
+    ```bash
+    npm run mcp:client
+    ```
+*   **Cliente de Red SSE**: Abre un canal de eventos en caliente sobre HTTP y envía peticiones `POST` simulando transacciones remotas:
+    ```bash
+    npm run mcp:client:sse
+    ```
 
 ---
 
 ## 🔒 Seguridad y Buenas Prácticas
 
-*   **Evita el uso de Dependencias de Terceros**: Mantén el proyecto 100% limpio auditando únicamente tus líneas locales de código.
-*   **Validación Estricta**: Declara siempre tus esquemas en la carpeta `schemas/` para proteger tus endpoints contra payloads corruptos o inyecciones maliciosas de parámetros de entrada.
-*   **Directivas CORS**: Configura adecuadamente el objeto `cors` en el constructor de `FastAPI` para restringir los orígenes según el ambiente de despliegue.
+*   **Evita el uso de Dependencias**: Mantén el proyecto 100% auditable para eliminar vulnerabilidades heredadas.
+*   **Directory Traversal**: Los servidores de archivos estáticos (`serveStatic`) y las herramientas de guardado de logs (`guardar_log`) utilizan `path.resolve` y verificación de pertenencia para impedir el escape de directorios locales.
+*   **Logs y STDERR**: Toda la telemetría del servidor MCP se dirige a `stderr`, manteniendo el canal `stdout` exclusivamente reservado para las tramas JSON-RPC 2.0.
