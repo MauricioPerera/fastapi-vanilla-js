@@ -5,9 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "mcp": "node mcp.js",
     "test": "node run-all-tests.js",
     "test:node": "node test.js",
-    "test:edge": "node test-edge.js"
+    "test:edge": "node test-edge.js",
+    "test:mcp": "node test-mcp.js"
   },
   "keywords": [
     "fastapi",

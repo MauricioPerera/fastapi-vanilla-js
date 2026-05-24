@@ -23,8 +23,11 @@ async function start() {
     
     // 2. Ejecutar Suite de Cloudflare Workers (Edge)
     const edgeSuccess = await runSuite('CLOUDFLARE WORKERS EDGE INTEGRATION (V8 MOCKS)', 'test-edge.js');
+
+    // 3. Ejecutar Suite del Servidor MCP
+    const mcpSuccess = await runSuite('MODEL CONTEXT PROTOCOL (FastMCP) STDIO', 'test-mcp.js');
     
-    // 3. Imprimir reporte consolidado
+    // 4. Imprimir reporte consolidado
     console.log('\n\x1b[1m\x1b[36m========================================================\x1b[0m');
     console.log(`\x1b[1m\x1b[36m📊 REPORTE DE RESULTADOS CONSOLIDADOS\x1b[0m`);
     console.log('\x1b[1m\x1b[36m========================================================\x1b[0m');
@@ -40,12 +43,18 @@ async function start() {
     } else {
         console.log(`🔴 \x1b[1mSuite CF Workers Edge (test-edge.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
+
+    if (mcpSuccess) {
+        console.log(`🟢 \x1b[1mSuite FastMCP Server (test-mcp.js)\x1b[0m  : \x1b[32m✓ PASSED (8/8 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite FastMCP Server (test-mcp.js)\x1b[0m  : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
     
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
     
-    if (nodeSuccess && edgeSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
-        console.log(`\x1b[32mTodas las rutas, esquemas, inyecciones y CORS funcionan perfectamente.\x1b[0m\n`);
+        console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);
     } else {
         console.log(`\n\x1b[1m\x1b[31m❌ ALGUNAS PRUEBAS FALLARON. Revisa la consola superior. ❌\x1b[0m\n`);
