@@ -284,6 +284,57 @@ app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
 
+// ----------------------------------------------------------------------------
+// ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)
+// ----------------------------------------------------------------------------
+app.post('/auth/register', async (request, env, ctx) => {
+    await ensureAuthInit(env);
+    const { email, password, name } = request.body;
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: "Formato de correo electrónico inválido" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (!password || password.length < 6) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: "La contraseña debe tener al menos 6 caracteres" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    try {
+        const user = await auth.register(email, password, { name });
+        return {
+            mensaje: "Usuario registrado con éxito",
+            usuario: user
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+}, {
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true }
+    }
+});
+
+app.post('/auth/login', async (request, env, ctx) => {
+    await ensureAuthInit(env);
+    const { email, password } = request.body;
+    try {
+        const session = await auth.login(email, password);
+        return {
+            mensaje: "Login exitoso",
+            token: session.token,
+            usuario: session.user
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Credenciales inválidas", mensaje: err.message }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+}, {
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true }
+    }
+});
+
 // Endpoint Raíz
 app.get('/', (request) => {
     return {

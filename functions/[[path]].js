@@ -284,19 +284,59 @@ app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
 
-// Ruta Raíz de la API REST - Con negociación de contenido para servir la consola UI a navegadores
-app.get('/', async (request, env, ctx) => {
-    const accept = request.headers.get('accept') || '';
-    if (accept.includes('text/html') && env && env.ASSETS) {
-        try {
-            const assetResponse = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
-            if (assetResponse.status === 200) {
-                return assetResponse;
-            }
-        } catch (e) {
-            console.error("Fallo al cargar index.html de ASSETS:", e.message);
-        }
+// ----------------------------------------------------------------------------
+// ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)
+// ----------------------------------------------------------------------------
+app.post('/auth/register', async (request, env, ctx) => {
+    await ensureAuthInit(env);
+    const { email, password, name } = request.body;
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: "Formato de correo electrónico inválido" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
+    if (!password || password.length < 6) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: "La contraseña debe tener al menos 6 caracteres" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    try {
+        const user = await auth.register(email, password, { name });
+        return {
+            mensaje: "Usuario registrado con éxito",
+            usuario: user
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error en el registro", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+}, {
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true }
+    }
+});
+
+app.post('/auth/login', async (request, env, ctx) => {
+    await ensureAuthInit(env);
+    const { email, password } = request.body;
+    try {
+        const session = await auth.login(email, password);
+        return {
+            mensaje: "Login exitoso",
+            token: session.token,
+            usuario: session.user
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Credenciales inválidas", mensaje: err.message }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+}, {
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true }
+    }
+});
+
+// Ruta Raíz de la API REST
+app.get('/', (request) => {
     return {
         mensaje: "¡Bienvenido a FastAPI Pages Functions en Cloudflare!",
         documentacion: "/docs",
@@ -307,14 +347,5 @@ app.get('/', async (request, env, ctx) => {
 // 5. EXPORTACIÓN DEL PUNTO DE ENTRADA EXCLUSIVO PARA CLOUDFLARE PAGES FUNCTIONS
 export async function onRequest(context) {
     const { request, env } = context;
-    const response = await app.handle(request, env, context);
-    if (response.status === 404) {
-        // En Cloudflare Pages, si la API no maneja la ruta, servimos el archivo estático correspondiente de env.ASSETS
-        const clone = request.clone();
-        const assetResponse = await env.ASSETS.fetch(clone);
-        if (assetResponse.status !== 404) {
-            return assetResponse;
-        }
-    }
-    return response;
+    return await app.handle(request, env, context);
 }

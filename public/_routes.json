@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "include": [
+    "/openapi.json",
+    "/docs",
+    "/users*",
+    "/items*",
+    "/auth*",
+    "/vectors*",
+    "/sse*",
+    "/message*"
+  ],
+  "exclude": []
+}
