@@ -230,7 +230,7 @@ vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
 });
 
 vectorRouter.post('/search', async (request, env, ctx, deps) => {
-    const { collection, vector, limit, metric, dimSlice, filter } = request.body;
+    const { collection, vector, limit, metric, dimSlice, filter, cursor } = request.body;
     const { store, quantization } = getEdgeStore(request);
     
     if (!collection || !Array.isArray(vector)) {
@@ -244,13 +244,29 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
     const metricVal = metric || 'cosine';
     const sliceVal = dimSlice || 0;
     
+    let offset = 0;
+    if (cursor) {
+        try {
+            offset = parseInt(atob(cursor), 10);
+            if (isNaN(offset)) offset = 0;
+        } catch (e) {
+            offset = 0;
+        }
+    }
+    const fetchK = offset + limitVal;
+
     await preloadVectorCol(store, collection);
-    const results = store.search(collection, vector, limitVal, sliceVal, metricVal, filter);
+    const results = store.search(collection, vector, fetchK, sliceVal, metricVal, filter);
+    const slicedResults = results.slice(offset, offset + limitVal);
+    const totalDocs = store._collections.get(collection)?.ids.length || 0;
+    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
+
     return {
         mensaje: "Búsqueda semántica completada en el Edge",
         collection,
         quantization,
-        resultados: results
+        resultados: slicedResults,
+        nextCursor
     };
 }, {
     body: {
@@ -260,12 +276,13 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
         metric: { type: 'string', required: false },
         dimSlice: { type: 'number', required: false },
         filter: { type: 'object', required: false },
-        quantization: { type: 'string', required: false }
+        quantization: { type: 'string', required: false },
+        cursor: { type: 'string', required: false }
     }
 });
 
 vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
-    const { collection, vector, text, limit, alpha, metric } = request.body;
+    const { collection, vector, text, limit, alpha, metric, cursor } = request.body;
     const { store, quantization } = getEdgeStore(request);
     
     if (!collection || !Array.isArray(vector) || typeof text !== 'string') {
@@ -279,19 +296,35 @@ vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
     const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
     const metricVal = metric || 'cosine';
     
+    let offset = 0;
+    if (cursor) {
+        try {
+            offset = parseInt(atob(cursor), 10);
+            if (isNaN(offset)) offset = 0;
+        } catch (e) {
+            offset = 0;
+        }
+    }
+    const fetchK = offset + limitVal;
+
     await preloadVectorCol(store, collection);
-    const results = store.hybrid.search(collection, vector, text, limitVal, {
+    const results = store.hybrid.search(collection, vector, text, fetchK, {
         vectorWeight: alphaVal,
         textWeight: 1 - alphaVal,
         metric: metricVal
     });
     
+    const slicedResults = results.slice(offset, offset + limitVal);
+    const totalDocs = store._collections.get(collection)?.ids.length || 0;
+    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
+
     return {
         mensaje: "Búsqueda híbrida completada en el Edge",
         collection,
         quantization,
         alpha: alphaVal,
-        resultados: results
+        resultados: slicedResults,
+        nextCursor
     };
 }, {
     body: {
@@ -301,7 +334,8 @@ vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
         limit: { type: 'number', required: false },
         alpha: { type: 'number', required: false },
         metric: { type: 'string', required: false },
-        quantization: { type: 'string', required: false }
+        quantization: { type: 'string', required: false },
+        cursor: { type: 'string', required: false }
     }
 });
 

@@ -554,6 +554,102 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(bodySemantic.resultados[0].id, "hybrid-doc-2");
     });
 
+    // Test 19: Paginación Cursada en Búsqueda Semántica
+    await t.test('POST /vectors/search - Valida paginación cursada con cursor Base64 (nextCursor)', async (t) => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        // Upsert 3 documentos
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                id: "pdoc-1",
+                vector: makeVector(0.1),
+                metadata: { text: "Doc uno" }
+            })
+        });
+
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                id: "pdoc-2",
+                vector: makeVector(0.2),
+                metadata: { text: "Doc dos" }
+            })
+        });
+
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                id: "pdoc-3",
+                vector: makeVector(0.3),
+                metadata: { text: "Doc tres" }
+            })
+        });
+
+        // 1. Obtener primera página (limit = 1)
+        const res1 = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                vector: makeVector(0.12),
+                limit: 1
+            })
+        });
+        assert.strictEqual(res1.status, 200);
+        const body1 = await res1.json();
+        assert.strictEqual(body1.resultados.length, 1);
+        assert.ok(body1.nextCursor);
+
+        // 2. Obtener segunda página usando nextCursor
+        const res2 = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                vector: makeVector(0.12),
+                limit: 1,
+                cursor: body1.nextCursor
+            })
+        });
+        assert.strictEqual(res2.status, 200);
+        const body2 = await res2.json();
+        assert.strictEqual(body2.resultados.length, 1);
+        assert.notStrictEqual(body2.resultados[0].id, body1.resultados[0].id);
+        assert.ok(body2.nextCursor);
+
+        // 3. Obtener tercera página (debe ser la última, nextCursor = null)
+        const res3 = await fetch(`${BASE_URL}/vectors/search`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "page-test-col",
+                vector: makeVector(0.12),
+                limit: 1,
+                cursor: body2.nextCursor
+            })
+        });
+        assert.strictEqual(res3.status, 200);
+        const body3 = await res3.json();
+        assert.strictEqual(body3.resultados.length, 1);
+        assert.strictEqual(body3.nextCursor, null);
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');

@@ -72,7 +72,7 @@ vectorRouter.post('/upsert', (req, res, deps) => {
 
 // 2. Búsqueda Semántica
 vectorRouter.post('/search', (req, res, deps) => {
-    const { collection, vector, limit, metric, dimSlice, filter } = req.body;
+    const { collection, vector, limit, metric, dimSlice, filter, cursor } = req.body;
     const { store, idx, quantization } = getStoreAndIndex(req);
 
     if (!collection || !Array.isArray(vector)) {
@@ -88,6 +88,17 @@ vectorRouter.post('/search', (req, res, deps) => {
     const limitVal = limit || 5;
     const metricVal = metric || 'cosine';
     const sliceVal = dimSlice || 0;
+
+    let offset = 0;
+    if (cursor) {
+        try {
+            offset = parseInt(atob(cursor), 10);
+            if (isNaN(offset)) offset = 0;
+        } catch (e) {
+            offset = 0;
+        }
+    }
+    const fetchK = offset + limitVal;
     
     let results;
     if (idx.hasIndex(collection)) {
@@ -96,16 +107,21 @@ vectorRouter.post('/search', (req, res, deps) => {
         if (idxData && idxData.numProbes) {
             idx.numProbes = idxData.numProbes;
         }
-        results = idx.search(collection, vector, limitVal);
+        results = idx.search(collection, vector, fetchK);
     } else {
-        results = store.search(collection, vector, limitVal, sliceVal, metricVal, filter);
+        results = store.search(collection, vector, fetchK, sliceVal, metricVal, filter);
     }
+
+    const slicedResults = results.slice(offset, offset + limitVal);
+    const totalDocs = store._collections.get(collection)?.ids.length || 0;
+    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
     
     return {
         mensaje: "Búsqueda semántica completada",
         collection,
         quantization,
-        resultados: results
+        resultados: slicedResults,
+        nextCursor
     };
 }, {
     summary: "Búsqueda Semántica",
@@ -116,13 +132,14 @@ vectorRouter.post('/search', (req, res, deps) => {
         metric: { type: 'string', required: false },
         dimSlice: { type: 'number', required: false },
         filter: { type: 'object', required: false },
-        quantization: { type: 'string', required: false }
+        quantization: { type: 'string', required: false },
+        cursor: { type: 'string', required: false }
     }
 });
 
 // 2.5 Búsqueda Híbrida (Dense Vector + Sparse BM25)
 vectorRouter.post('/search-hybrid', (req, res, deps) => {
-    const { collection, vector, text, limit, alpha, metric } = req.body;
+    const { collection, vector, text, limit, alpha, metric, cursor } = req.body;
     const { store, quantization } = getStoreAndIndex(req);
 
     if (!collection || !Array.isArray(vector) || typeof text !== 'string') {
@@ -138,19 +155,35 @@ vectorRouter.post('/search-hybrid', (req, res, deps) => {
     const limitVal = limit || 5;
     const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
     const metricVal = metric || 'cosine';
+
+    let offset = 0;
+    if (cursor) {
+        try {
+            offset = parseInt(atob(cursor), 10);
+            if (isNaN(offset)) offset = 0;
+        } catch (e) {
+            offset = 0;
+        }
+    }
+    const fetchK = offset + limitVal;
     
-    const results = store.hybrid.search(collection, vector, text, limitVal, {
+    const results = store.hybrid.search(collection, vector, text, fetchK, {
         vectorWeight: alphaVal,
         textWeight: 1 - alphaVal,
         metric: metricVal
     });
+
+    const slicedResults = results.slice(offset, offset + limitVal);
+    const totalDocs = store._collections.get(collection)?.ids.length || 0;
+    const nextCursor = (offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
     
     return {
         mensaje: "Búsqueda híbrida completada",
         collection,
         quantization,
         alpha: alphaVal,
-        resultados: results
+        resultados: slicedResults,
+        nextCursor
     };
 }, {
     summary: "Búsqueda Híbrida",
@@ -161,7 +194,8 @@ vectorRouter.post('/search-hybrid', (req, res, deps) => {
         limit: { type: 'number', required: false },
         alpha: { type: 'number', required: false },
         metric: { type: 'string', required: false },
-        quantization: { type: 'string', required: false }
+        quantization: { type: 'string', required: false },
+        cursor: { type: 'string', required: false }
     }
 });
 

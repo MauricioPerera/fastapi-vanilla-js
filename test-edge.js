@@ -239,5 +239,86 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         assert.strictEqual(body.resultados.length, 1);
         assert.strictEqual(body.resultados[0].id, "doc-edge-1");
     });
+
+    // Test 14: Paginación Cursada en el Edge
+    await t.test('POST /vectors/search - Valida paginación cursada con cursor Base64 en el Edge', async () => {
+        // Upsert 3 documentos
+        for (let i = 1; i <= 3; i++) {
+            const upsertReq = new Request('http://localhost/vectors/upsert', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer edge-secret-token',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    collection: "edge-page-col",
+                    id: `edoc-${i}`,
+                    vector: new Array(768).fill(0.1 * i),
+                    metadata: { text: `Doc ${i}` }
+                })
+            });
+            await worker.fetch(upsertReq, env, ctx);
+        }
+
+        // 1. Obtener primera página (limit = 1)
+        const searchReq1 = new Request('http://localhost/vectors/search', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-page-col",
+                vector: new Array(768).fill(0.12),
+                limit: 1
+            })
+        });
+        const res1 = await worker.fetch(searchReq1, env, ctx);
+        assert.strictEqual(res1.status, 200);
+        const body1 = await res1.json();
+        assert.strictEqual(body1.resultados.length, 1);
+        assert.ok(body1.nextCursor);
+
+        // 2. Obtener segunda página usando nextCursor
+        const searchReq2 = new Request('http://localhost/vectors/search', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-page-col",
+                vector: new Array(768).fill(0.12),
+                limit: 1,
+                cursor: body1.nextCursor
+            })
+        });
+        const res2 = await worker.fetch(searchReq2, env, ctx);
+        assert.strictEqual(res2.status, 200);
+        const body2 = await res2.json();
+        assert.strictEqual(body2.resultados.length, 1);
+        assert.notStrictEqual(body2.resultados[0].id, body1.resultados[0].id);
+        assert.ok(body2.nextCursor);
+
+        // 3. Obtener tercera página (debe ser la última, nextCursor = null)
+        const searchReq3 = new Request('http://localhost/vectors/search', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-page-col",
+                vector: new Array(768).fill(0.12),
+                limit: 1,
+                cursor: body2.nextCursor
+            })
+        });
+        const res3 = await worker.fetch(searchReq3, env, ctx);
+        assert.strictEqual(res3.status, 200);
+        const body3 = await res3.json();
+        assert.strictEqual(body3.resultados.length, 1);
+        assert.strictEqual(body3.nextCursor, null);
+    });
 });
 
