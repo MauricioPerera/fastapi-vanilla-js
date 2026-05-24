@@ -650,6 +650,104 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(body3.nextCursor, null);
     });
 
+    // Test 20: Serialización y Compresión de Estado BM25 mediante Mapeo Posicional de IDs de Enteros
+    await t.test('BM25 Index - Valida compresión y mapeo posicional en el manifiesto JSON', async (t) => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        const collectionName = "bm25-compress-col";
+
+        // Upsert 2 documentos con contenido de texto para generar el índice BM25
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                id: "c-doc-1",
+                vector: makeVector(0.1),
+                metadata: { text: "inteligencia artificial perimetral en cloudflare edge" }
+            })
+        });
+
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                id: "c-doc-2",
+                vector: makeVector(0.2),
+                metadata: { text: "medicina de precisión y salud digital avanzada" }
+            })
+        });
+
+        // Trigger del flush del motor haciendo una búsqueda híbrida
+        const searchRes = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                vector: makeVector(0.12),
+                text: "inteligencia precisión",
+                limit: 2,
+                alpha: 0.5
+            })
+        });
+        assert.strictEqual(searchRes.status, 200);
+        const searchBody = await searchRes.json();
+        assert.strictEqual(searchBody.resultados.length, 2);
+
+        // Leer el archivo de manifiesto directamente del disco para validar el formato de compresión
+        const fs = require('fs');
+        const path = require('path');
+        const manifestPath = path.resolve(__dirname, '.data', 'vectors', `${collectionName}.json`);
+        
+        assert.ok(fs.existsSync(manifestPath), "El manifiesto JSON debería haber sido persistido en disco.");
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+        // Validaciones del esquema comprimido de BM25
+        assert.ok(manifest.bm25, "El manifiesto debe incluir la propiedad de estado BM25.");
+        assert.ok(Array.isArray(manifest.bm25.vocab), "El estado BM25 debe contener un vocabulario de tipo Array.");
+        assert.ok(Array.isArray(manifest.bm25.lens), "El estado BM25 debe contener lens de tipo Array.");
+        assert.ok(Array.isArray(manifest.bm25.postings), "El estado BM25 debe contener postings de tipo Array.");
+
+        // Validar que no contenga referencias repetitivas a docId strings en el estado postings
+        const rawJsonString = JSON.stringify(manifest.bm25);
+        assert.ok(!rawJsonString.includes("c-doc-1"), "El estado comprimido no debe contener strings repetitivos de docId.");
+        assert.ok(!rawJsonString.includes("c-doc-2"), "El estado comprimido no debe contener strings repetitivos de docId.");
+
+        // Validar que el mapeo e hidratación sea funcional haciendo una búsqueda idéntica
+        // (esto forzará cargar de nuevo desde disco en un nuevo proceso/estado limpio)
+        // Eliminamos de memoria de colecciones cargadas para simular un inicio en frío
+        const vectorDb = require('./dependencies/vector');
+        const store = vectorDb.getStore('float32');
+        store._collections.delete(collectionName);
+        store.bm25._data.delete(collectionName);
+
+        const searchResAfterLoad = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: collectionName,
+                vector: makeVector(0.12),
+                text: "inteligencia precisión",
+                limit: 2,
+                alpha: 0.5
+            })
+        });
+        const bodyAfterLoad = await searchResAfterLoad.json();
+        assert.strictEqual(bodyAfterLoad.resultados.length, 2);
+        assert.strictEqual(bodyAfterLoad.resultados[0].id, searchBody.resultados[0].id, "Las búsquedas deben retornar el mismo resultado exacto tras la deserialización.");
+        assert.strictEqual(bodyAfterLoad.resultados[0].score, searchBody.resultados[0].score, "Los scores deben coincidir al 100% tras la deserialización.");
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');
