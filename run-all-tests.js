@@ -33,7 +33,7 @@ async function start() {
     console.log('\x1b[1m\x1b[36m========================================================\x1b[0m');
     
     if (nodeSuccess) {
-        console.log(`🟢 \x1b[1mSuite Node.js Server (test.js)\x1b[0m   : \x1b[32m✓ PASSED (10/10 pruebas exitosas)\x1b[0m`);
+        console.log(`🟢 \x1b[1mSuite Node.js Server (test.js)\x1b[0m   : \x1b[32m✓ PASSED (12/12 pruebas exitosas)\x1b[0m`);
     } else {
         console.log(`🔴 \x1b[1mSuite Node.js Server (test.js)\x1b[0m   : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }

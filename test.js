@@ -1,6 +1,23 @@
 process.env.PORT = '8999';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+// Limpiar la base de datos de pruebas (.data/) antes de arrancar para asegurar consistencia
+const dbPath = path.resolve(__dirname, '.data');
+if (fs.existsSync(dbPath)) {
+    const files = fs.readdirSync(dbPath);
+    for (const file of files) {
+        if (file.endsWith('.json')) {
+            try {
+                fs.unlinkSync(path.join(dbPath, file));
+            } catch (e) {
+                // Silencioso si no se puede borrar
+            }
+        }
+    }
+}
 
 // Esperar un breve momento para garantizar que el servidor principal en index.js se haya inicializado por completo en el puerto 8999
 const BASE_URL = 'http://localhost:8999';
@@ -126,6 +143,66 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         assert.strictEqual(body.item.nombre, "Teclado Mecánico");
         assert.strictEqual(body.item.precio, 85);
         assert.strictEqual(body.item.en_oferta, true);
+    });
+
+    // --- NUEVAS PRUEBAS DE INTEGRACIÓN PERSISTENTES (js-doc-store) ---
+
+    let realToken = '';
+
+    // Test 10: Registrar un usuario real en la base de datos
+    await t.test('POST /auth/register - Registra un usuario real con cifrado PBKDF2', async () => {
+        const payload = {
+            email: "developer@test.com",
+            password: "SecurePassword123!",
+            name: "Dev User"
+        };
+        const res = await fetch(`${BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        assert.strictEqual(res.status, 200);
+        
+        const body = await res.json();
+        assert.strictEqual(body.mensaje, "Usuario registrado con éxito");
+        assert.strictEqual(body.usuario.email, "developer@test.com");
+        assert.strictEqual(body.usuario.name, "Dev User");
+        assert.ok(body.usuario._id);
+        assert.strictEqual(body.usuario.passwordHash, undefined); // Protege hash
+    });
+
+    // Test 11: Iniciar sesión real y obtener JWT criptográfico
+    await t.test('POST /auth/login - Loguea usuario y firma token JWT nativo', async () => {
+        const payload = {
+            email: "developer@test.com",
+            password: "SecurePassword123!"
+        };
+        const res = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        assert.strictEqual(res.status, 200);
+        
+        const body = await res.json();
+        assert.strictEqual(body.mensaje, "Login exitoso");
+        assert.ok(body.token);
+        assert.strictEqual(body.usuario.email, "developer@test.com");
+        realToken = body.token; // Guardar token para test posterior
+    });
+
+    // Test 12: Acceso a ruta segura usando el JWT real de js-doc-store
+    await t.test('GET /items - Acceso exitoso usando JWT criptográfico real', async () => {
+        const res = await fetch(`${BASE_URL}/items`, {
+            headers: {
+                'Authorization': `Bearer ${realToken}`
+            }
+        });
+        assert.strictEqual(res.status, 200);
+        
+        const body = await res.json();
+        assert.strictEqual(body.usuario.email, "developer@test.com");
+        assert.ok(body.items);
     });
 
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente

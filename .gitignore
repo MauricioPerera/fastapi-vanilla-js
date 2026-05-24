@@ -20,3 +20,8 @@ yarn-error.log*
 # Cobertura de pruebas
 coverage/
 .nyc_output/
+
+# Base de datos local y temporales de ejecución
+.data/
+.logs/
+.wrangler/

@@ -36,6 +36,72 @@ app.addExceptionHandler(UnauthorizedError, (req, res, err) => {
 app.includeRouter(userRouter);
 app.includeRouter(itemRouter);
 
+// 4.1 Endpoints nativos de Autenticación con js-doc-store
+const { auth, ensureAuthInit } = require('./dependencies/auth');
+
+// Seed automático de datos en el arranque del servidor
+async function seedDatabase() {
+    await ensureAuthInit();
+    const existingAdmin = auth.getUserByEmail('admin@test.com');
+    if (!existingAdmin) {
+        await auth.register('admin@test.com', 'password123', {
+            name: "Admin User",
+            roles: ["admin"]
+        });
+    }
+    const existingUser = auth.getUserByEmail('user@test.com');
+    if (!existingUser) {
+        await auth.register('user@test.com', 'password123', {
+            name: "Standard User",
+            roles: ["user"]
+        });
+        console.log(`\n\x1b[32m✔ Base de datos inicializada: Se registraron 'admin@test.com' y 'user@test.com'.\x1b[0m`);
+    }
+}
+seedDatabase().catch(err => console.error("Error sembrando base de datos:", err));
+
+app.post('/auth/register', async (req, res) => {
+    await ensureAuthInit();
+    const { email, password, name } = req.body;
+    try {
+        const user = await auth.register(email, password, { name });
+        return {
+            mensaje: "Usuario registrado con éxito",
+            usuario: user
+        };
+    } catch (err) {
+        return res.json({ detail: "Error en el registro", mensaje: err.message }, 400);
+    }
+}, {
+    summary: "Registrar Usuario",
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true },
+        name: { type: 'string', required: false }
+    }
+});
+
+app.post('/auth/login', async (req, res) => {
+    await ensureAuthInit();
+    const { email, password } = req.body;
+    try {
+        const session = await auth.login(email, password);
+        return {
+            mensaje: "Login exitoso",
+            token: session.token,
+            usuario: session.user
+        };
+    } catch (err) {
+        return res.json({ detail: "Credenciales inválidas", mensaje: err.message }, 401);
+    }
+}, {
+    summary: "Iniciar Sesión",
+    body: {
+        email: { type: 'string', required: true },
+        password: { type: 'string', required: true }
+    }
+});
+
 // 4.5 Integración del Servidor Model Context Protocol (FastMCP) sobre HTTP/SSE
 const { FastMCP } = require('./lib/fastmcp');
 const { registerSystemFeatures } = require('./lib/mcp-features');
