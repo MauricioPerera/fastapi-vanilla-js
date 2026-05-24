@@ -1,6 +1,6 @@
 import { FastAPI, APIRouter } from '../lib/fastapi-edge.js';
-import { DocStore, MemoryStorageAdapter, CloudflareKVAdapter, Auth } from '../lib/js-doc-store.js';
-import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore } from '../lib/js-vector-store.js';
+import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth } from '../lib/js-doc-store.js';
+import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore, MemoryStorageAdapter, CloudflareKVAdapter } from '../lib/js-vector-store.js';
 
 // 1. Inicializar la aplicación para Pages Functions
 const app = new FastAPI({
@@ -32,9 +32,9 @@ let stores;
 function ensureDbAndAuth(env) {
     if (!db) {
         if (env && env.MY_KV) {
-            db = new DocStore(new CloudflareKVAdapter(env.MY_KV, 'db/'));
+            db = new DocStore(new DocKVAdapter(env.MY_KV, 'db/'));
         } else {
-            db = new DocStore(new MemoryStorageAdapter());
+            db = new DocStore(new DocMemoryAdapter());
         }
         auth = new Auth(db, {
             secret: env.API_SECRET_TOKEN || 'pages-secret-token'
@@ -79,8 +79,27 @@ const getEdgeStore = (req) => {
     };
 };
 
+const preloadVectorCol = async (store, col) => {
+    if (store._adapter && typeof store._adapter.preload === 'function') {
+        const jsonFile = store._jsonFile(col);
+        const binFile = store._binFile(col);
+        await store._adapter.preload([jsonFile, binFile]);
+    }
+};
+
+const ensureAuthPreloaded = async () => {
+    if (db && db._adapter && typeof db._adapter.preload === 'function') {
+        await db._adapter.preload([
+            'users.docs.json', 'users.meta.json',
+            'sessions.docs.json', 'sessions.meta.json'
+        ]);
+    }
+};
+
 // 3. Dependency Resolver para Usuarios de Pages
 const getPagesUser = async (request, env, ctx) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
     await ensureAuthInit(env);
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -188,6 +207,7 @@ vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
         return new Response(JSON.stringify({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     
+    await preloadVectorCol(store, collection);
     store.set(collection, id, vector, metadata || {});
     await store.flush();
     
@@ -201,7 +221,9 @@ vectorRouter.post('/upsert', async (request, env, ctx, deps) => {
     body: {
         collection: { type: 'string', required: true },
         id: { type: 'string', required: true },
-        vector: { type: 'array', required: true }
+        vector: { type: 'array', required: true },
+        metadata: { type: 'object', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
@@ -220,6 +242,7 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
     const metricVal = metric || 'cosine';
     const sliceVal = dimSlice || 0;
     
+    await preloadVectorCol(store, collection);
     const results = store.search(collection, vector, limitVal, sliceVal, metricVal, filter);
     return {
         mensaje: "Búsqueda semántica completada en el Edge",
@@ -230,7 +253,53 @@ vectorRouter.post('/search', async (request, env, ctx, deps) => {
 }, {
     body: {
         collection: { type: 'string', required: true },
-        vector: { type: 'array', required: true }
+        vector: { type: 'array', required: true },
+        limit: { type: 'number', required: false },
+        metric: { type: 'string', required: false },
+        dimSlice: { type: 'number', required: false },
+        filter: { type: 'object', required: false },
+        quantization: { type: 'string', required: false }
+    }
+});
+
+vectorRouter.post('/search-hybrid', async (request, env, ctx, deps) => {
+    const { collection, vector, text, limit, alpha, metric } = request.body;
+    const { store, quantization } = getEdgeStore(request);
+    
+    if (!collection || !Array.isArray(vector) || typeof text !== 'string') {
+        return new Response(JSON.stringify({ detail: "Campos 'collection', 'vector' y 'text' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (vector.length !== store.dim) {
+        return new Response(JSON.stringify({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    const limitVal = limit || 5;
+    const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
+    const metricVal = metric || 'cosine';
+    
+    await preloadVectorCol(store, collection);
+    const results = store.hybrid.search(collection, vector, text, limitVal, {
+        vectorWeight: alphaVal,
+        textWeight: 1 - alphaVal,
+        metric: metricVal
+    });
+    
+    return {
+        mensaje: "Búsqueda híbrida completada en el Edge",
+        collection,
+        quantization,
+        alpha: alphaVal,
+        resultados: results
+    };
+}, {
+    body: {
+        collection: { type: 'string', required: true },
+        vector: { type: 'array', required: true },
+        text: { type: 'string', required: true },
+        limit: { type: 'number', required: false },
+        alpha: { type: 'number', required: false },
+        metric: { type: 'string', required: false },
+        quantization: { type: 'string', required: false }
     }
 });
 
@@ -269,6 +338,7 @@ vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
     if (!cols.includes(col)) {
         return new Response(JSON.stringify({ detail: `Colección vectorial '${col}' no encontrada en el Edge (${quantization})` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
     }
+    await preloadVectorCol(store, col);
     store.drop(col);
     return {
         mensaje: `Colección vectorial '${col}' eliminada con éxito del Edge (${quantization})`
@@ -284,6 +354,8 @@ app.includeRouter(vectorRouter);
 // ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)
 // ----------------------------------------------------------------------------
 app.post('/auth/register', async (request, env, ctx) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
     await ensureAuthInit(env);
     const { email, password, name } = request.body;
     
@@ -312,6 +384,8 @@ app.post('/auth/register', async (request, env, ctx) => {
 });
 
 app.post('/auth/login', async (request, env, ctx) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
     await ensureAuthInit(env);
     const { email, password } = request.body;
     try {
@@ -343,5 +417,17 @@ app.get('/', (request) => {
 // 5. EXPORTACIÓN DEL PUNTO DE ENTRADA EXCLUSIVO PARA CLOUDFLARE PAGES FUNCTIONS
 export async function onRequest(context) {
     const { request, env } = context;
-    return await app.handle(request, env, context);
+    const response = await app.handle(request, env, context);
+    // Persistir base de datos y almacenes vectoriales al final del request en Pages Functions
+    if (db && db._adapter && typeof db._adapter.persist === 'function') {
+        context.waitUntil(db._adapter.persist());
+    }
+    if (stores) {
+        for (const store of Object.values(stores)) {
+            if (store._adapter && typeof store._adapter.persist === 'function') {
+                context.waitUntil(store._adapter.persist());
+            }
+        }
+    }
+    return response;
 }

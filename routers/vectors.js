@@ -120,6 +120,51 @@ vectorRouter.post('/search', (req, res, deps) => {
     }
 });
 
+// 2.5 Búsqueda Híbrida (Dense Vector + Sparse BM25)
+vectorRouter.post('/search-hybrid', (req, res, deps) => {
+    const { collection, vector, text, limit, alpha, metric } = req.body;
+    const { store, quantization } = getStoreAndIndex(req);
+
+    if (!collection || !Array.isArray(vector) || typeof text !== 'string') {
+        return res.json({ detail: "Campos 'collection', 'vector' y 'text' son obligatorios" }, 400);
+    }
+    if (vector.length !== store.dim) {
+        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
+    }
+    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
+        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
+    }
+    
+    const limitVal = limit || 5;
+    const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
+    const metricVal = metric || 'cosine';
+    
+    const results = store.hybrid.search(collection, vector, text, limitVal, {
+        vectorWeight: alphaVal,
+        textWeight: 1 - alphaVal,
+        metric: metricVal
+    });
+    
+    return {
+        mensaje: "Búsqueda híbrida completada",
+        collection,
+        quantization,
+        alpha: alphaVal,
+        resultados: results
+    };
+}, {
+    summary: "Búsqueda Híbrida",
+    body: {
+        collection: { type: 'string', required: true },
+        vector: { type: 'array', required: true },
+        text: { type: 'string', required: true },
+        limit: { type: 'number', required: false },
+        alpha: { type: 'number', required: false },
+        metric: { type: 'string', required: false },
+        quantization: { type: 'string', required: false }
+    }
+});
+
 // 3. Búsqueda Dimensional Matryoshka
 vectorRouter.post('/search-matryoshka', (req, res, deps) => {
     const { collection, vector, limit, stages, metric } = req.body;

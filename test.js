@@ -480,6 +480,80 @@ test('FastAPI Vanilla JS Integration Suite', async (t) => {
         }
     });
 
+    // Test 18: Búsqueda Híbrida Semántica y Léxica (Dense + BM25)
+    await t.test('POST /vectors/search-hybrid - Valida fusión de score léxico (BM25) y semántico (Dense)', async (t) => {
+        const loginRes = await fetch(`${BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: "developer@test.com",
+                password: "SecurePassword123!"
+            })
+        });
+        const loginBody = await loginRes.json();
+        const token = loginBody.token;
+
+        // Upsert Documento 1 (Cercano a 0.1 vectorialmente, habla de inteligencia artificial)
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "hybrid-test-col",
+                id: "hybrid-doc-1",
+                vector: makeVector(0.1),
+                metadata: { text: "Búsqueda híbrida con BM25 e inteligencia artificial en el Edge" }
+            })
+        });
+
+        // Upsert Documento 2 (Cercano a 0.9 vectorialmente, habla de medicina avanzada)
+        await fetch(`${BASE_URL}/vectors/upsert`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "hybrid-test-col",
+                id: "hybrid-doc-2",
+                vector: makeVector(0.9),
+                metadata: { text: "La medicina avanzada y tratamientos de salud en hospitales" }
+            })
+        });
+
+        // Caso 1: Búsqueda Léxica pura (alpha = 0.0) buscando "BM25 inteligencia"
+        // Debe ganar hybrid-doc-1
+        const resLexical = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "hybrid-test-col",
+                vector: makeVector(0.95), // Cercano a doc-2
+                text: "BM25 inteligencia",
+                limit: 1,
+                alpha: 0.0
+            })
+        });
+        assert.strictEqual(resLexical.status, 200);
+        const bodyLexical = await resLexical.json();
+        assert.strictEqual(bodyLexical.resultados.length, 1);
+        assert.strictEqual(bodyLexical.resultados[0].id, "hybrid-doc-1");
+
+        // Caso 2: Búsqueda Semántica pura (alpha = 1.0) buscando "BM25 inteligencia" pero con vector 0.95
+        // Debe ganar hybrid-doc-2 (cercano a 0.95 vs 0.1)
+        const resSemantic = await fetch(`${BASE_URL}/vectors/search-hybrid`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                collection: "hybrid-test-col",
+                vector: makeVector(0.95),
+                text: "BM25 inteligencia",
+                limit: 1,
+                alpha: 1.0
+            })
+        });
+        assert.strictEqual(resSemantic.status, 200);
+        const bodySemantic = await resSemantic.json();
+        assert.strictEqual(bodySemantic.resultados.length, 1);
+        assert.strictEqual(bodySemantic.resultados[0].id, "hybrid-doc-2");
+    });
+
     // Test finalización: Cerrar el servidor activo de index.js para que el proceso de tests finalice limpiamente
     t.after(() => {
         const app = require('./index');

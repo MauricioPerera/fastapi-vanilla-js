@@ -700,7 +700,7 @@
                             <select class="form-control" id="new-item-offer">
                                 <option value="true">Sí</option>
                                 <option value="false" selected>No</option>
-                            </</select>
+                            </select>
                         </div>
                     </div>
                     <button class="btn" onclick="saveItem()">Guardar Ítem en Disco</button>
@@ -814,7 +814,24 @@
                             </div>
                         </div>
 
-                        <button class="btn" style="width: 100%; justify-content: center; margin-bottom: 24px;" onclick="executeSemanticSearch()">Ejecutar Búsqueda Semántica</button>
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label class="form-label">Término de Búsqueda Léxica (BM25)</label>
+                            <input type="text" class="form-control" id="search-text-query" placeholder="Ej: medicina en el edge">
+                        </div>
+
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label class="form-label" id="label-alpha">Ponderación Alfa (α): 0.5 (Fusión Balanceada)</label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span style="font-size: 11px; color: var(--text-muted);">0.0 (Léxico)</span>
+                                <input type="range" class="form-control-range" id="search-alpha" min="0" max="1" step="0.1" value="0.5" style="flex: 1;" oninput="updateAlphaLabel(this.value)">
+                                <span style="font-size: 11px; color: var(--text-muted);">1.0 (Semántico)</span>
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; margin-top: 16px;">
+                            <button class="btn btn-outline" style="justify-content: center;" onclick="executeSemanticSearch()">Búsqueda Semántica</button>
+                            <button class="btn" style="justify-content: center;" onclick="executeHybridSearch()">Búsqueda Híbrida (BM25)</button>
+                        </div>
 
                         <div class="glass-box-header">
                             <div class="glass-box-title" style="font-size: 14px; color: var(--cyan);">Rankings de Similitud y Scores</div>
@@ -1330,6 +1347,85 @@
                         });
                     } else {
                         container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">No se encontraron vectores indexados en '${col}' [${quant}].</div>`;
+                    }
+                } else {
+                    const data = await res.json();
+                    container.innerHTML = `<div style="text-align: center; color: var(--danger); font-size: 13px; padding: 20px 0;">Error del servidor: ${data.detail || 'Fallo de consulta'}</div>`;
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="text-align: center; color: var(--danger); font-size: 13px; padding: 20px 0;">Fallo de comunicación con la base de datos vectorial</div>`;
+            }
+        }
+
+        function updateAlphaLabel(val) {
+            const label = document.getElementById('label-alpha');
+            const numVal = Number(val);
+            if (numVal === 0) {
+                label.textContent = `Ponderación Alfa (α): ${val} (100% Léxico/BM25)`;
+            } else if (numVal === 1) {
+                label.textContent = `Ponderación Alfa (α): ${val} (100% Semántico/Vectorial)`;
+            } else {
+                label.textContent = `Ponderación Alfa (α): ${val} (Fusión Balanceada)`;
+            }
+        }
+
+        async function executeHybridSearch() {
+            const col = 'docs';
+            const limit = Number(document.getElementById('search-limit').value) || 3;
+            const metric = document.getElementById('search-metric').value;
+            const quant = document.getElementById('search-quant').value;
+            const text = document.getElementById('search-text-query').value || '';
+            const alpha = Number(document.getElementById('search-alpha').value);
+            const vector = makeVectorForJs(currentSearchQueryPresetVal);
+
+            if (!text.trim()) {
+                alert("Por favor ingresa un término de búsqueda léxica (BM25) para realizar la consulta híbrida.");
+                return;
+            }
+
+            const container = document.getElementById('search-results-output');
+            container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">Consultando búsqueda híbrida [${quant}] en caliente...</div>`;
+
+            try {
+                const res = await fetch('/vectors/search-hybrid', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        collection: col,
+                        vector,
+                        text,
+                        limit,
+                        alpha,
+                        metric,
+                        quantization: quant
+                    })
+                });
+
+                if (res.status === 200) {
+                    const data = await res.json();
+                    container.innerHTML = '';
+                    if (data.resultados && data.resultados.length > 0) {
+                        data.resultados.forEach(item => {
+                            const percent = Math.max(0, Math.min(100, Math.round(item.score * 100)));
+                            const scoreFormatted = Math.round(item.score * 10000) / 10000;
+                            const category = item.metadata?.category || 'general';
+
+                            container.innerHTML += `
+                                <div class="score-bar-row">
+                                    <div class="score-bar-id">${item.id}</div>
+                                    <div style="font-size: 12px; color: var(--text-muted); width: 80px; text-transform: capitalize;">${category}</div>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill" style="width: ${percent}%; background: linear-gradient(90deg, var(--cyan), var(--purple));"></div>
+                                    </div>
+                                    <div class="score-bar-val">${scoreFormatted}</div>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px 0;">No se encontraron resultados para la consulta híbrida.</div>`;
                     }
                 } else {
                     const data = await res.json();

@@ -200,5 +200,44 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         const body = await res.json();
         assert.strictEqual(body.quantization, 'int8');
     });
+
+    // Test 13: Vector endpoints - Búsqueda Híbrida simétrica en el Edge
+    await t.test('POST /vectors/search-hybrid - Valida búsqueda híbrida simétrica en el Edge', async () => {
+        const upsertReq = new Request('http://localhost/vectors/upsert', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-hybrid-col",
+                id: "doc-edge-1",
+                vector: new Array(768).fill(0.1),
+                metadata: { text: "Cloudflare Workers y Pages Functions con bases de datos" }
+            })
+        });
+        await worker.fetch(upsertReq, env, ctx);
+
+        const searchReq = new Request('http://localhost/vectors/search-hybrid', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer edge-secret-token',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                collection: "edge-hybrid-col",
+                vector: new Array(768).fill(0.1),
+                text: "Cloudflare Workers",
+                limit: 1,
+                alpha: 0.5
+            })
+        });
+        const res = await worker.fetch(searchReq, env, ctx);
+        assert.strictEqual(res.status, 200);
+        const body = await res.json();
+        assert.strictEqual(body.mensaje, "Búsqueda híbrida completada en el Edge");
+        assert.strictEqual(body.resultados.length, 1);
+        assert.strictEqual(body.resultados[0].id, "doc-edge-1");
+    });
 });
 
