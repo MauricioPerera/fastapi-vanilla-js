@@ -1,11 +1,11 @@
 const { APIRouter } = require('../lib/fastapi');
 const { ItemBodySchema } = require('../schemas/item.schema');
-const { getCurrectUser } = require('../dependencies/auth');
+const { getCurrentUser } = require('../dependencies/auth');
 
 const itemRouter = new APIRouter({
     prefix: '/items',
     tags: ['Ítems'],
-    dependencies: { user: getCurrectUser } // Obliga a que todas las rutas requieran Auth
+    dependencies: { user: getCurrentUser } // Obliga a que todas las rutas requieran Auth
 });
 
 // Crear ítem (POST) seguro con validación de body

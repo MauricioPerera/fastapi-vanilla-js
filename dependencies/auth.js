@@ -5,7 +5,7 @@ class UnauthorizedError extends Error {
     }
 }
 
-const getCurrectUser = async (req, res) => {
+const getCurrentUser = async (req, res) => {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.json({ detail: "No autorizado. Se requiere Token Bearer." }, 401);
@@ -13,8 +13,9 @@ const getCurrectUser = async (req, res) => {
     }
     
     const token = authHeader.split(' ')[1];
-    // Simular validación del token
-    if (token !== 'super-secret-token') {
+    // Validación del token con variable de entorno (fallback seguro para desarrollo local)
+    const secretToken = process.env.API_SECRET_TOKEN || 'super-secret-token';
+    if (token !== secretToken) {
         res.json({ detail: "No autorizado. Token incorrecto." }, 403);
         throw new UnauthorizedError("Acceso prohibido");
     }
@@ -27,6 +28,6 @@ const getCurrectUser = async (req, res) => {
 };
 
 module.exports = {
-    getCurrectUser,
+    getCurrentUser,
     UnauthorizedError
 };

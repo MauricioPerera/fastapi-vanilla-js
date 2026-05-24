@@ -13,6 +13,7 @@ COPY lib/ ./lib/
 COPY schemas/ ./schemas/
 COPY dependencies/ ./dependencies/
 COPY routers/ ./routers/
+COPY public/ ./public/
 
 # Exponer el puerto del microframework
 EXPOSE 8000

@@ -29,7 +29,8 @@ const getEdgeUser = async (request, env, ctx) => {
         throw new Error("Unauthorized");
     }
     const token = authHeader.split(' ')[1];
-    if (token !== 'edge-secret-token') {
+    const secretToken = env.API_SECRET_TOKEN || 'edge-secret-token';
+    if (token !== secretToken) {
         throw new Error("Forbidden");
     }
     return { username: "edge_developer", role: "admin" };

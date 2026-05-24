@@ -28,7 +28,8 @@ const getPagesUser = async (request, env, ctx) => {
         throw new Error("Unauthorized");
     }
     const token = authHeader.split(' ')[1];
-    if (token !== 'pages-secret-token') {
+    const secretToken = env.API_SECRET_TOKEN || 'pages-secret-token';
+    if (token !== secretToken) {
         throw new Error("Forbidden");
     }
     return { username: "pages_operator", role: "admin" };
