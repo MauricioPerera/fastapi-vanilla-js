@@ -10,7 +10,8 @@
     "/cpts*",
     "/chat*",
     "/sse*",
-    "/message*"
+    "/message*",
+    "/debug*"
   ],
   "exclude": []
 }

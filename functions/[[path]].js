@@ -1145,6 +1145,14 @@ app.get('/debug-schemas', async (request, env) => {
     };
 });
 
+app.get('/debug-env', (request, env) => {
+    return {
+        keys: env ? Object.keys(env) : [],
+        hasMyKv: !!(env && env.MY_KV),
+        myKvType: env && env.MY_KV ? typeof env.MY_KV : null
+    };
+});
+
 // Ruta Raíz de la API REST
 app.get('/', (request) => {
     return {
