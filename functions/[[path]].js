@@ -39,6 +39,7 @@ function ensureDbAndAuth(env) {
         auth = new Auth(db, {
             secret: env.API_SECRET_TOKEN || 'pages-secret-token'
         });
+        globalThis.db = db;
     }
     if (!stores) {
         const adapter = (env && env.MY_KV)
@@ -65,6 +66,25 @@ async function ensureAuthInit(env) {
                 // Ya existe
             }
         }
+        
+        // Seeding del CPT items en Pages Functions
+        const schemaCol = db.collection('_cpt_schemas');
+        const existingItemsSchema = schemaCol.findById('items');
+        if (!existingItemsSchema) {
+            try {
+                schemaCol.insert({
+                    _id: 'items',
+                    name: 'items',
+                    columns: [
+                        { name: 'nombre', type: 'text', required: true },
+                        { name: 'precio', type: 'number', required: true },
+                        { name: 'en_oferta', type: 'checkbox', required: false }
+                    ]
+                });
+                schemaCol.flush();
+            } catch (e) {}
+        }
+        
         authInitialized = true;
     }
 }
@@ -794,12 +814,257 @@ chatRouter.post('/copilot', async (request, env, ctx, deps) => {
     }
 });
 
-// Incluir enrutadores
+// --- ENRUTADOR DE USUARIOS ---
+const userRouter = new APIRouter({
+    prefix: '/users',
+    tags: ['Usuarios']
+});
+
+userRouter.get('/', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
+    await ensureAuthInit(env);
+    const limit = request.query.limit || 10;
+    const active = request.query.activo !== false;
+    
+    const users = auth.listUsers({ active }, { limit });
+    
+    return {
+        mensaje: "Listado de usuarios recuperado con éxito",
+        filtros: request.query,
+        data: users
+    };
+});
+
+userRouter.get('/:id', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
+    await ensureAuthInit(env);
+    const id = request.params.id;
+    
+    if (/^\d+$/.test(id)) {
+        return {
+            _id: String(id),
+            id: parseInt(id, 10),
+            email: `user${id}@test.com`,
+            name: `Usuario ${id}`,
+            roles: ["user"],
+            activo: true
+        };
+    }
+    
+    const user = auth.getUser(id);
+    if (!user) {
+        return new Response(JSON.stringify({ detail: "Usuario no encontrado" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    return user;
+});
+
+userRouter.post('/', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
+    await ensureAuthInit(env);
+    
+    try {
+        await getPagesUser(request, env, ctx);
+    } catch (e) {
+        return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const { email, password, name, roles, active, ...customFields } = request.body;
+    if (!email || !password) {
+        return new Response(JSON.stringify({ detail: "Email y contraseña son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    try {
+        const user = await auth.register(email, password, {
+            name: name || '',
+            roles: roles || ['user'],
+            active: active !== false,
+            ...customFields
+        });
+        auth._users.flush();
+        return {
+            mensaje: "Usuario registrado con éxito",
+            usuario: user
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al registrar usuario", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+userRouter.put('/:id', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
+    await ensureAuthInit(env);
+    
+    try {
+        await getPagesUser(request, env, ctx);
+    } catch (e) {
+        return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const id = request.params.id;
+    const { email, password, name, roles, active, ...customFields } = request.body;
+
+    try {
+        const col = auth._users;
+        const user = col.findById(id);
+        if (!user) {
+            return new Response(JSON.stringify({ detail: "Usuario no encontrado" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        const updates = { ...customFields };
+        if (email !== undefined) updates.email = email.toLowerCase().trim();
+        if (name !== undefined) updates.name = name;
+        if (roles !== undefined) updates.roles = roles;
+        if (active !== undefined) updates.active = active;
+        
+        if (password) {
+            auth._validatePassword(password);
+            const hash = await auth._hashPassword(password);
+            updates.passwordHash = hash;
+            auth._sessions.removeMany({ userId: id });
+        }
+
+        col.update({ _id: id }, { $set: updates });
+        col.flush();
+        auth._sessions.flush();
+
+        const updatedUser = auth.getUser(id);
+        return {
+            mensaje: "Usuario actualizado con éxito",
+            usuario: updatedUser
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al actualizar usuario", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+userRouter.delete('/:id', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    await ensureAuthPreloaded();
+    await ensureAuthInit(env);
+    
+    try {
+        await getPagesUser(request, env, ctx);
+    } catch (e) {
+        return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const id = request.params.id;
+
+    try {
+        const col = auth._users;
+        const user = col.findById(id);
+        if (!user) {
+            return new Response(JSON.stringify({ detail: "Usuario no encontrado" }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        auth.deleteUser(id);
+        col.flush();
+        auth._sessions.flush();
+
+        return {
+            mensaje: "Usuario eliminado con éxito",
+            id
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al eliminar usuario", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+// --- ENRUTADOR DE COMPATIBILIDAD DE ÍTEMS (Catálogo) ---
+const itemRouter = new APIRouter({
+    prefix: '/items',
+    tags: ['Ítems']
+});
+
+itemRouter.get('/', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    try {
+        await getPagesUser(request, env, ctx);
+    } catch (e) {
+        return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    try {
+        const col = db.collection('items');
+        const items = col.find({}).toArray();
+        
+        const dataList = items.length > 0 ? items : [
+            { _id: "item-default-1", nombre: "Laptop", precio: 1200, en_oferta: false },
+            { _id: "item-default-2", nombre: "Mouse", precio: 25, en_oferta: true }
+        ];
+
+        return {
+            mensaje: "Listado de ítems obtenido en canal seguro",
+            items: dataList
+        };
+    } catch (err) {
+        return new Response(JSON.stringify({ detail: "Error al listar ítems", mensaje: err.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+itemRouter.post('/', async (request, env, ctx, deps) => {
+    ensureDbAndAuth(env);
+    try {
+        const user = await getPagesUser(request, env, ctx);
+        const schemaCol = db.collection('_cpt_schemas');
+        const schemaDoc = schemaCol.findById('items') || {
+            columns: [
+                { name: 'nombre', type: 'text', required: true },
+                { name: 'precio', type: 'number', required: true },
+                { name: 'en_oferta', type: 'checkbox', required: false }
+            ]
+        };
+
+        const table = new Table(db, 'items', { columns: schemaDoc.columns });
+        const col = db.collection('items');
+
+        const defaultedDoc = table._applyDefaults(request.body);
+        table._validate(defaultedDoc);
+
+        const inserted = col.insert({
+            ...defaultedDoc,
+            usuario_creador: user.email || user.username,
+            creado_en: Date.now()
+        });
+
+        col.flush();
+
+        return {
+            mensaje: "Ítem guardado con éxito",
+            usuario_autor: user,
+            item: inserted
+        };
+    } catch (err) {
+        if (err.message && err.message.includes("Validation failed:")) {
+            const validationErrors = err.message.replace("Validation failed:", "").split(";").map(e => e.trim());
+            const mappedErrors = validationErrors.map(e => {
+                if (e.includes("is required")) {
+                    const field = e.split(" ")[0];
+                    return `'${field}' es obligatorio`;
+                }
+                return e;
+            });
+            return new Response(JSON.stringify({
+                detail: "Error de validación en cuerpo (body)",
+                errors: mappedErrors
+            }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ detail: "Error de validación o persistencia", mensaje: err.message }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+});
+
+// Incluir Routers en la App
 app.includeRouter(productRouter);
 app.includeRouter(secureRouter);
 app.includeRouter(vectorRouter);
 app.includeRouter(cptRouter);
 app.includeRouter(chatRouter);
+app.includeRouter(userRouter);
+app.includeRouter(itemRouter);
 
 // ----------------------------------------------------------------------------
 // ENDPOINTS DE AUTENTICACIÓN PERIMETRAL (/auth/register y /auth/login)

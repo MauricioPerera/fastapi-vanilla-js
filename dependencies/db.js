@@ -4,5 +4,6 @@ const path = require('path');
 // Inicializar base de datos persistente en disco en la carpeta '.data/'
 const dbPath = path.resolve(__dirname, '..', '.data');
 const db = new DocStore(new FileStorageAdapter(dbPath));
+globalThis.db = db;
 
 module.exports = db;

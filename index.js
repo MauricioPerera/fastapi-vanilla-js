@@ -55,6 +55,25 @@ async function seedDatabase() {
             roles: ["admin"]
         });
     }
+    const db = require('./dependencies/db');
+    const schemaCol = db.collection('_cpt_schemas');
+    const existingItemsSchema = schemaCol.findById('items');
+    if (!existingItemsSchema) {
+        schemaCol.insert({
+            _id: 'items',
+            name: 'items',
+            columns: [
+                { name: 'nombre', type: 'text', required: true },
+                { name: 'precio', type: 'number', required: true },
+                { name: 'en_oferta', type: 'checkbox', required: false }
+            ]
+        });
+        try {
+            schemaCol.flush();
+        } catch (e) {}
+        console.log(`\n\x1b[32m✔ Base de datos inicializada: Se registró el CPT 'items' (Catálogo).\x1b[0m`);
+    }
+
     const existingUser = auth.getUserByEmail('user@test.com');
     if (!existingUser) {
         await auth.register('user@test.com', 'password123', {
