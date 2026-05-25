@@ -1126,6 +1126,25 @@ app.post('/auth/login', async (request, env, ctx) => {
     }
 });
 
+app.get('/debug-schemas', async (request, env) => {
+    ensureDbAndAuth(env);
+    await ensureAuthInit(env);
+    let schemas = [];
+    try {
+        const schemaCol = db.collection('_cpt_schemas');
+        if (schemaCol) {
+            schemas = schemaCol.find({}).toArray();
+        }
+    } catch (e) {
+        return { error: e.message, stack: e.stack };
+    }
+    return {
+        hasGlobalDb: !!globalThis.db,
+        collections: globalThis.db ? Array.from(globalThis.db._collections.keys()) : [],
+        schemas
+    };
+});
+
 // Endpoint Raíz
 app.get('/', (request) => {
     return {
