@@ -1126,7 +1126,7 @@ app.post('/auth/login', async (request, env, ctx) => {
     }
 });
 
-app.get('/debug-schemas', async (request, env) => {
+app.get('/cpts/debug-schemas', async (request, env) => {
     ensureDbAndAuth(env);
     await ensureAuthInit(env);
     let schemas = [];
@@ -1145,7 +1145,7 @@ app.get('/debug-schemas', async (request, env) => {
     };
 });
 
-app.get('/debug-env', (request, env) => {
+app.get('/cpts/debug-env', (request, env) => {
     return {
         keys: env ? Object.keys(env) : [],
         hasMyKv: !!(env && env.MY_KV),
