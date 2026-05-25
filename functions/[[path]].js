@@ -88,6 +88,9 @@ async function ensureAuthInit(env) {
         }
         
         authInitialized = true;
+        if (db && db._adapter && typeof db._adapter.persist === 'function') {
+            await db._adapter.persist();
+        }
     }
 }
 
