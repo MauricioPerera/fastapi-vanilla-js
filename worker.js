@@ -16,6 +16,8 @@ const app = new FastAPI({
 
 // 2. Registro de un Middleware de Logs para el Edge
 app.addMiddleware(async (request, env, ctx, next) => {
+    ensureDbAndAuth(env);
+    await ensureAuthInit(env);
     const start = Date.now();
     const response = await next();
     const duration = Date.now() - start;
