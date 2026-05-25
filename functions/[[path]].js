@@ -548,11 +548,9 @@ const cptRouter = new APIRouter({
 
 const ensureCptsPreloaded = async (env) => {
     ensureDbAndAuth(env);
-    if (db && db._adapter && typeof db._adapter.preloadAll === 'function') {
-        for (const col of db._collections.values()) {
-            col._loaded = false;
-        }
+    if (!globalThis.cptsPreloaded && db && db._adapter && typeof db._adapter.preloadAll === 'function') {
         await db._adapter.preloadAll();
+        globalThis.cptsPreloaded = true;
     }
 };
 
