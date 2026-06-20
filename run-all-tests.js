@@ -48,6 +48,9 @@ async function start() {
     // 3d. Suite de features MCP del sistema (tools/resources/prompts en proceso)
     const mcpFeaturesSuccess = await runNodeTest('MCP FEATURES (in-process)', ['test-mcp-features.js']);
 
+    // 3e. Suite de routers HTTP (users CRUD + chat)
+    const routersSuccess = await runNodeTest('ROUTERS HTTP (users + chat)', ['test-routers.js']);
+
     // 4. Ejecutar Suite de Validación tipada + response_model (verificada con gate CCDD)
     const validationSuccess = await runNodeTest('VALIDATION + response_model (CCDD GATE + pipeline)', [
         'ccdd/validation/test_validate.js',
@@ -104,9 +107,15 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite MCP Features (test-mcp-features.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (routersSuccess) {
+        console.log(`🟢 \x1b[1mSuite Routers HTTP (test-routers.js)\x1b[0m  : \x1b[32m✓ PASSED (6/6 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Routers HTTP (test-routers.js)\x1b[0m  : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);
