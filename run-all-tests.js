@@ -43,6 +43,7 @@ async function start() {
     const validationSuccess = await runNodeTest('VALIDATION + response_model (CCDD GATE + pipeline)', [
         'ccdd/validation/test_validate.js',
         'ccdd/serialize/test_serialize.js',
+        'ccdd/coerce/test_coerce.js',
         'ccdd/validation/test_pipeline.js',
         'ccdd/validation/test_pipeline_edge.js',
     ]);
@@ -71,7 +72,7 @@ async function start() {
     }
 
     if (validationSuccess) {
-        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (24/24 pruebas exitosas)\x1b[0m`);
+        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (33/33 pruebas exitosas)\x1b[0m`);
     } else {
         console.log(`🔴 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
