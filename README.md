@@ -24,6 +24,33 @@ Este toolkit híbrido te permite escribir microservicios de alto rendimiento que
     *   **Transporte SSE (Server-Sent Events)**: Servidor de red en caliente que mapea eventos continuos del servidor y peticiones HTTP `POST` bajo el mismo puerto.
 *   **Servidor de Estáticos Nativo**: Carga asíncrona segura contra vulnerabilidades de *Directory Traversal*.
 
+### Validación tipada y `response_model` (uso)
+
+Las opciones `model`, `coerce` y `responseModel` se declaran por ruta (funcionan igual en Node y Edge):
+
+```js
+app.post('/signup', (req) => {
+    // req.body ya validado (y coercionado si coerce:true)
+    return { id: 1, email: req.body.email, password: req.body.password };
+}, {
+    coerce: true,                       // "30" -> 30 antes de validar
+    model: {                            // valida el body; body inválido -> 422 con errores por ruta
+        type: 'object',
+        properties: {
+            email: { type: 'string', required: true, minLength: 3 },
+            age:   { type: 'integer', minimum: 0 },
+            address: { type: 'object', properties: { city: { type: 'string', required: true } } }
+        }
+    },
+    responseModel: {                    // la respuesta solo expone id y email (password se excluye)
+        type: 'object',
+        properties: { id: { type: 'integer' }, email: { type: 'string' } }
+    }
+});
+```
+
+Un body inválido responde `422` con `{ detail, errors: [{ path, message }] }`, p. ej. `path: "address.city"`.
+
 ---
 
 ## 📂 Estructura del Proyecto
@@ -43,6 +70,7 @@ Este toolkit híbrido te permite escribir microservicios de alto rendimiento que
 ├── lib/
 │   ├── fastapi.js           # Núcleo del microframework API para Node.js.
 │   ├── fastapi-edge.js      # Núcleo del microframework API para el Edge.
+│   ├── validation.js        # Motor de validación tipada + coerción + response_model (verificado con gate CCDD).
 │   ├── fastmcp.js           # Núcleo del microframework Model Context Protocol (stdio/SSE).
 │   ├── mcp-features.js      # Registro de recursos, herramientas y prompts del sistema MCP.
 │   ├── mcp-fastapi-bridge.js# Traduce rutas REST a herramientas MCP nativas (llamada en proceso).
@@ -62,6 +90,10 @@ Este toolkit híbrido te permite escribir microservicios de alto rendimiento que
 │   └── chat.js              # Enrutador de chat/streaming.
 ├── functions/
 │   └── [[path]].js          # Enrutador comodín para Cloudflare Pages Functions.
+├── ccdd/                    # Artefactos CCDD: task-contracts + property-tests congelados.
+│   ├── validation/          # Contrato/tests de validate + integración del pipeline.
+│   ├── serialize/           # Contrato/tests de response_model (serialize).
+│   └── coerce/              # Contrato/tests de coerción de tipos.
 └── .github/
     └── workflows/
         └── tests.yml        # CI: batería de pruebas en GitHub Actions (Node 20 y 22).
@@ -123,13 +155,14 @@ Para integrarlo directamente en tu cliente de **Claude Desktop**:
 El toolkit incluye baterías completas de pruebas automatizadas nativas y clientes locales interactivos para verificar cada componente de red de forma local.
 
 ### 1. Batería Completa de Tests
-Ejecuta las **53 pruebas de integración nativas** de forma secuencial:
+Ejecuta las **88 pruebas nativas** de forma secuencial:
 ```bash
 npm test
 ```
-*   **Suite Node.js** (`test.js`): 22/22 aprobados.
+*   **Suite Node.js** (`test.js`): 23/23 aprobados.
 *   **Suite Edge Cloudflare** (`test-edge.js`): 19/19 aprobados.
 *   **Suite FastMCP Server** (`test-mcp.js`): 12/12 aprobados.
+*   **Suite Validación CCDD** (`ccdd/`): 34/34 aprobados — `validate`/`serialize`/`coerce` (property-tests congelados) + integración del pipeline (`model`/`responseModel`/`coerce`) en Node y Edge.
 
 > Estas mismas baterías se ejecutan automáticamente en **CI (GitHub Actions)** sobre Node 20 y 22 en cada push a `master` y en cada Pull Request (`.github/workflows/tests.yml`). El runner devuelve código de salida `1` ante cualquier fallo, por lo que un PR roto queda en rojo.
 
