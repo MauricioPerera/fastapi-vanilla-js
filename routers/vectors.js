@@ -55,7 +55,7 @@ const parseCursorOffset = (cursor) => {
     if (!cursor) return 0;
     try {
         const offset = parseInt(atob(cursor), 10);
-        return isNaN(offset) ? 0 : offset;
+        return (isNaN(offset) || offset < 0) ? 0 : offset;
     } catch (e) {
         return 0;
     }
