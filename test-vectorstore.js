@@ -23,8 +23,10 @@ test('math: cosineSim, dotProduct, euclideanDist, manhattanDist, normalize', () 
 // ── Backends: el vector idéntico a la consulta rankea primero ───────────────
 function backendRanksExact(Store, dim) {
   const s = new Store(new MemoryStorageAdapter(), dim);
-  const a = Array.from({ length: dim }, (_, i) => (i === 0 ? 1 : 0));
-  const b = Array.from({ length: dim }, (_, i) => (i === 1 ? 1 : 0));
+  // Relleno -1 (no 0): BinaryQuantizedStore cuantiza por signo (>=0 -> 1), así que con 0
+  // ambos vectores serían todo-1s idénticos y el test no discriminaría.
+  const a = Array.from({ length: dim }, (_, i) => (i === 0 ? 1 : -1));
+  const b = Array.from({ length: dim }, (_, i) => (i === 1 ? 1 : -1));
   s.set('c', 'a', a, { tag: 'A' });
   s.set('c', 'b', b, { tag: 'B' });
   assert.strictEqual(s.count('c'), 2);
@@ -36,7 +38,7 @@ function backendRanksExact(Store, dim) {
 
 test('VectorStore (Float32): set/search/count', () => {
   const s = backendRanksExact(VectorStore, 8);
-  assert.strictEqual(s.search('c', [1,0,0,0,0,0,0,0], 5, 0, 'cosine', { tag: 'A' }).length, 1); // filtro
+  assert.strictEqual(s.search('c', [1,-1,-1,-1,-1,-1,-1,-1], 5, 0, 'cosine', { tag: 'A' }).length, 1); // filtro
 });
 test('QuantizedStore (Int8): set/search', () => { backendRanksExact(QuantizedStore, 8); });
 test('BinaryQuantizedStore: set/search', () => { backendRanksExact(BinaryQuantizedStore, 8); });
@@ -85,7 +87,7 @@ test('IVFIndex: build + search devuelve vecinos', () => {
   store.set('c', 'b1', [0, 0, 1, 1]);
   store.set('c', 'b2', [0, 0, 1, 0.9]);
   store.set('c', 'b3', [0, 0, 0.9, 1]);
-  const idx = new IVFIndex(store, 2, 2);
+  const idx = new IVFIndex(store, 2, 1); // numProbes=1: solo el clúster más cercano (valida la poda IVF)
   idx.build('c');
   const res = idx.search('c', [1, 1, 0, 0], 3);
   assert.ok(res.length > 0);
