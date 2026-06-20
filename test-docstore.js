@@ -152,14 +152,15 @@ test('Auth._validatePassword: cada política y caso válido', () => {
     secret: 's',
     passwordPolicy: { minLength: 8, maxLength: 20, requireUppercase: true, requireLowercase: true, requireDigit: true, requireSymbol: true }
   });
-  const fails = (pw) => assert.throws(() => auth._validatePassword(pw));
-  fails('Ab1!');                 // < minLength
-  fails('A'.repeat(25) + 'b1!'); // > maxLength
-  fails('abcdef1!');             // sin mayúscula
-  fails('ABCDEF1!');             // sin minúscula
-  fails('Abcdefg!');             // sin dígito
-  fails('Abcdefg1');             // sin símbolo
-  fails(12345678);               // no string
+  // Validar el mensaje esperado evita falsos positivos (que salte otro error inesperado).
+  const fails = (pw, expected) => assert.throws(() => auth._validatePassword(pw), expected);
+  fails('Ab1!', /at least 8 characters/);                 // < minLength
+  fails('A'.repeat(25) + 'b1!', /at most 20 characters/); // > maxLength
+  fails('abcdef1!', /uppercase/);                          // sin mayúscula
+  fails('ABCDEF1!', /lowercase/);                          // sin minúscula
+  fails('Abcdefg!', /digit/);                              // sin dígito
+  fails('Abcdefg1', /symbol/);                             // sin símbolo
+  fails(12345678, /must be a string/);                     // no string
   assert.doesNotThrow(() => auth._validatePassword('Abcdef1!')); // cumple todo
 });
 
