@@ -9,8 +9,16 @@ class UnauthorizedError extends Error {
     }
 }
 
-// Inicializar el gestor de autenticación con el secreto JWT de variable de entorno o fallback seguro
-const authSecret = process.env.API_SECRET_TOKEN || 'super-secret-token';
+// El bypass de desarrollo y el secreto por defecto SOLO se permiten fuera de producción.
+const ALLOW_DEV_BYPASS = process.env.NODE_ENV !== 'production';
+const DEV_BYPASS_TOKEN = 'super-secret-token';
+
+// Secreto JWT: obligatorio en producción (falla-cerrado); default inseguro y claramente
+// marcado solo en desarrollo. Nunca reutiliza el token de bypass como secreto de firma.
+const authSecret = process.env.API_SECRET_TOKEN || (ALLOW_DEV_BYPASS ? 'dev-insecure-jwt-secret' : null);
+if (!authSecret) {
+    throw new Error("API_SECRET_TOKEN es obligatorio en producción (NODE_ENV=production).");
+}
 const auth = new Auth(db, {
     secret: authSecret,
     tokenExpiry: 86400 // 24 horas
@@ -34,16 +42,23 @@ async function ensureAuthInit() {
  */
 const getCurrentUser = async (req, res) => {
     await ensureAuthInit();
+
+    // Inyección de confianza en proceso (p.ej. el bridge MCP). No es alcanzable vía HTTP:
+    // las peticiones de red nunca traen esta propiedad, solo cabeceras.
+    if (req.internalAuth) {
+        return req.internalAuth;
+    }
+
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.json({ detail: "No autorizado. Se requiere Token Bearer." }, 401);
         throw new UnauthorizedError("Token no provisto o inválido");
     }
-    
+
     const token = authHeader.split(' ')[1];
-    
-    // Bypass de desarrollo para tests retrocompatibles (idéntico al mock original)
-    if (token === 'super-secret-token') {
+
+    // Bypass de desarrollo para tests retrocompatibles. Deshabilitado en producción.
+    if (ALLOW_DEV_BYPASS && token === DEV_BYPASS_TOKEN) {
         return {
             username: "admin_user",
             role: "administrator",

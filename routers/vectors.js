@@ -39,6 +39,32 @@ const ensureCryptoAndLoaded = async (store, collection) => {
     }
 };
 
+// Valida dimensión y finitud del vector. Devuelve el mensaje de error o null si es válido.
+const validateVectorValues = (vector, store) => {
+    if (vector.length !== store.dim) {
+        return `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.`;
+    }
+    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
+        return "El vector debe contener solo números finitos";
+    }
+    return null;
+};
+
+// Decodifica el cursor base64 a un offset entero; 0 ante cualquier valor inválido.
+const parseCursorOffset = (cursor) => {
+    if (!cursor) return 0;
+    try {
+        const offset = parseInt(atob(cursor), 10);
+        return isNaN(offset) ? 0 : offset;
+    } catch (e) {
+        return 0;
+    }
+};
+
+// Calcula el cursor de la siguiente página, o null si no hay más resultados.
+const buildNextCursor = (slicedLen, offset, limitVal, totalDocs) =>
+    (slicedLen === limitVal && offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
+
 // 1. Upsert de Vectores
 vectorRouter.post('/upsert', async (req, res, deps) => {
     const { collection, id, vector, metadata } = req.body;
@@ -47,13 +73,9 @@ vectorRouter.post('/upsert', async (req, res, deps) => {
     if (!collection || !id || !Array.isArray(vector)) {
         return res.json({ detail: "Campos 'collection', 'id' y 'vector' son obligatorios" }, 400);
     }
-    if (vector.length !== store.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
-    }
-    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
-        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
-    }
-    
+    const vErr = validateVectorValues(vector, store);
+    if (vErr) return res.json({ detail: vErr }, 400);
+
     await ensureCryptoAndLoaded(store, collection);
     store.set(collection, id, vector, metadata || {});
     
@@ -92,26 +114,14 @@ vectorRouter.post('/search', async (req, res, deps) => {
     if (!collection || !Array.isArray(vector)) {
         return res.json({ detail: "Campos 'collection' y 'vector' son obligatorios" }, 400);
     }
-    if (vector.length !== store.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
-    }
-    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
-        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
-    }
-    
+    const vErr = validateVectorValues(vector, store);
+    if (vErr) return res.json({ detail: vErr }, 400);
+
     const limitVal = limit || 5;
     const metricVal = metric || 'cosine';
     const sliceVal = dimSlice || 0;
 
-    let offset = 0;
-    if (cursor) {
-        try {
-            offset = parseInt(atob(cursor), 10);
-            if (isNaN(offset)) offset = 0;
-        } catch (e) {
-            offset = 0;
-        }
-    }
+    const offset = parseCursorOffset(cursor);
     const fetchK = offset + limitVal;
     
     await ensureCryptoAndLoaded(store, collection);
@@ -130,8 +140,8 @@ vectorRouter.post('/search', async (req, res, deps) => {
 
     const slicedResults = results.slice(offset, offset + limitVal);
     const totalDocs = store.count(collection);
-    const nextCursor = (slicedResults.length === limitVal && offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
-    
+    const nextCursor = buildNextCursor(slicedResults.length, offset, limitVal, totalDocs);
+
     return {
         mensaje: "Búsqueda semántica completada",
         collection,
@@ -161,26 +171,14 @@ vectorRouter.post('/search-hybrid', async (req, res, deps) => {
     if (!collection || !Array.isArray(vector) || typeof text !== 'string') {
         return res.json({ detail: "Campos 'collection', 'vector' y 'text' son obligatorios" }, 400);
     }
-    if (vector.length !== store.dim) {
-        return res.json({ detail: `Dimensión de vector inválida. Se espera ${store.dim} dimensiones.` }, 400);
-    }
-    if (!vector.every(v => typeof v === 'number' && Number.isFinite(v))) {
-        return res.json({ detail: "El vector debe contener solo números finitos" }, 400);
-    }
-    
+    const vErr = validateVectorValues(vector, store);
+    if (vErr) return res.json({ detail: vErr }, 400);
+
     const limitVal = limit || 5;
     const alphaVal = typeof alpha === 'number' ? alpha : 0.5;
     const metricVal = metric || 'cosine';
 
-    let offset = 0;
-    if (cursor) {
-        try {
-            offset = parseInt(atob(cursor), 10);
-            if (isNaN(offset)) offset = 0;
-        } catch (e) {
-            offset = 0;
-        }
-    }
+    const offset = parseCursorOffset(cursor);
     const fetchK = offset + limitVal;
     
     await ensureCryptoAndLoaded(store, collection);
@@ -193,8 +191,8 @@ vectorRouter.post('/search-hybrid', async (req, res, deps) => {
 
     const slicedResults = results.slice(offset, offset + limitVal);
     const totalDocs = store.count(collection);
-    const nextCursor = (slicedResults.length === limitVal && offset + limitVal < totalDocs) ? btoa((offset + limitVal).toString()) : null;
-    
+    const nextCursor = buildNextCursor(slicedResults.length, offset, limitVal, totalDocs);
+
     return {
         mensaje: "Búsqueda híbrida completada",
         collection,
