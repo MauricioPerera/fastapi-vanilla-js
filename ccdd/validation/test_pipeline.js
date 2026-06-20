@@ -31,6 +31,12 @@ test.before(async () => {
     }
   });
 
+  // Ruta con coerción opt-in: "30" (string) debe coercionarse a 30 (integer) y pasar.
+  app.post('/coerced', (req) => ({ age: req.body.age, tipo: typeof req.body.age }), {
+    coerce: true,
+    model: { type: 'object', properties: { age: { type: 'integer', minimum: 0, required: true } } }
+  });
+
   server = app.listen(PORT);
   await new Promise(r => setTimeout(r, 150));
 });
@@ -68,4 +74,15 @@ test('responseModel: la respuesta no expone password ni token', async () => {
   assert.deepStrictEqual(body, { id: 1, name: 'Ana' });
   assert.strictEqual(body.password, undefined);
   assert.strictEqual(body.token, undefined);
+});
+
+test('coerce: "30" string se coerciona a 30 integer y pasa', async () => {
+  const res = await fetch(`${BASE}/coerced`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ age: '30' })
+  });
+  assert.strictEqual(res.status, 200);
+  const body = await res.json();
+  assert.strictEqual(body.age, 30);
+  assert.strictEqual(body.tipo, 'number');
 });

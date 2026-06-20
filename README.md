@@ -16,7 +16,7 @@ Este toolkit híbrido te permite escribir microservicios de alto rendimiento que
 *   **Cero Dependencias (`0 node_modules`)**: 100% auditable, inmune a ataques de la cadena de suministro y huella de memoria ínfima (~15MB-30MB).
 *   **APIRouter Modular**: Divide tu aplicación en subcontroladores limpios con herencia de prefijos, dependencias comunes y etiquetas OpenAPI.
 *   **Validación de Esquemas (Pydantic-like)**: Motor ligero de validación y coerción automática de tipos de datos en parámetros Query y Body.
-*   **Validación tipada y `response_model`**: Opciones de ruta `model` (validación recursiva de objetos anidados, arrays y constraints, con errores estructurados por ruta de campo y respuesta `422`) y `responseModel` (proyecta la respuesta a solo los campos declarados, sin exponer datos sensibles). Núcleo implementado y verificado con el gate determinista CCDD (ver `ccdd/`).
+*   **Validación tipada, coerción y `response_model`**: Opciones de ruta `model` (validación recursiva de objetos anidados, arrays y constraints, con errores estructurados por ruta de campo y respuesta `422`), `coerce` (coerción de tipos estilo Pydantic antes de validar, p. ej. `"30"`→`30`) y `responseModel` (proyecta la respuesta a solo los campos declarados, sin exponer datos sensibles). Disponibles en Node y Edge. Núcleo (`validate`/`serialize`/`coerce`) implementado y verificado con el gate determinista CCDD (ver `ccdd/`).
 *   **Inyección de Dependencias Asíncrona (`Depends`)**: Lógica declarativa para autenticación de seguridad, logs y orquestación de servicios.
 *   **Swagger UI y OpenAPI Nativo**: Generación dinámica en tiempo de ejecución de especificaciones OpenAPI 3.0.0 y servicio de Swagger UI en `/docs` desde CDN.
 *   **Conectividad MCP Dual**:
