@@ -4,6 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { serialize } = require('../../lib/validation');
 
+test('null y undefined pasan sin proyectar', () => {
+  const schema = { type: 'object', properties: { a: { type: 'number' } } };
+  assert.strictEqual(serialize(null, schema), null);
+  assert.strictEqual(serialize(undefined, schema), undefined);
+});
+
 test('descarta campo no declarado', () => {
   const schema = { type: 'object', properties: { a: { type: 'number' }, b: { type: 'number' } } };
   assert.deepStrictEqual(serialize({ a: 1, b: 2, secret: 9 }, schema), { a: 1, b: 2 });

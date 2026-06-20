@@ -44,6 +44,7 @@ async function start() {
         'ccdd/validation/test_validate.js',
         'ccdd/serialize/test_serialize.js',
         'ccdd/validation/test_pipeline.js',
+        'ccdd/validation/test_pipeline_edge.js',
     ]);
 
     // 5. Imprimir reporte consolidado
@@ -70,7 +71,7 @@ async function start() {
     }
 
     if (validationSuccess) {
-        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (20/20 pruebas exitosas)\x1b[0m`);
+        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (24/24 pruebas exitosas)\x1b[0m`);
     } else {
         console.log(`🔴 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
