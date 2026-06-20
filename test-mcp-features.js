@@ -5,18 +5,26 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { FastMCP } = require('./lib/fastmcp');
 const { registerSystemFeatures } = require('./lib/mcp-features');
+const db = require('./dependencies/db');
 
 const mcp = new FastMCP('test-features', { version: '0.0.0' });
 registerSystemFeatures(mcp);
 
 let _id = 0;
-const rpc = (method, params) => mcp._handleMessage({ jsonrpc: '2.0', id: ++_id, method, params });
+const rpc = async (method, params) => {
+  const res = await mcp._handleMessage({ jsonrpc: '2.0', id: ++_id, method, params });
+  if (res && res.error) {
+    throw new Error(`RPC Error [${method}]: ${res.error.message} (code: ${res.error.code})`);
+  }
+  return res;
+};
 const callTool = async (name, args = {}) => {
   const res = await rpc('tools/call', { name, arguments: args });
   return JSON.parse(res.result.content[0].text);
 };
 
-test('tool document_insert + document_find (ida y vuelta sobre el DocStore)', async () => {
+test('tool document_insert + document_find (ida y vuelta sobre el DocStore)', async (t) => {
+  t.after(() => { try { db.drop('mcpfeat_docs'); } catch (e) { /* ya eliminada */ } });
   const ins = await callTool('document_insert', { collection: 'mcpfeat_docs', document: { titulo: 'hola', n: 1 } });
   assert.strictEqual(ins.estado, 'EXITOSO');
   assert.ok(ins.documento._id);
