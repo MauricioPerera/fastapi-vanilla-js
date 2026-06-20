@@ -21,11 +21,11 @@ test.before(async () => {
   app.includeRouter(userRouter);
   app.includeRouter(chatRouter);
   server = app.listen(PORT);
-  await new Promise(r => setTimeout(r, 150));
+  await new Promise(resolve => { server.listening ? resolve() : server.once('listening', resolve); });
   await ensureAuthInit();
-  // Limpieza defensiva de una posible ejecución previa interrumpida.
+  // Limpieza defensiva de una posible ejecución previa interrumpida (persistida a disco).
   const ex = auth.getUserByEmail(TEST_EMAIL);
-  if (ex) auth.deleteUser(ex._id);
+  if (ex) { auth.deleteUser(ex._id); auth._users.flush(); }
 });
 
 test.after(() => { if (server) server.close(); });
@@ -71,7 +71,7 @@ test('POST/PUT/DELETE /users: ciclo de vida completo', async (t) => {
   assert.strictEqual(created.status, 200);
   const id = (await created.json()).usuario._id;
   assert.ok(id);
-  t.after(() => { const u = auth.getUserByEmail(TEST_EMAIL); if (u) auth.deleteUser(u._id); });
+  t.after(() => { const u = auth.getUserByEmail(TEST_EMAIL); if (u) { auth.deleteUser(u._id); auth._users.flush(); } });
 
   // Actualizar
   const updated = await fetch(`${BASE}/users/${id}`, {
