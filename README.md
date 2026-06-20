@@ -95,7 +95,7 @@ Para integrarlo directamente en tu cliente de **Claude Desktop**:
   "mcpServers": {
     "api-mcp-toolkit": {
       "command": "node",
-      "args": ["D:/repos/api/mcp.js"]
+      "args": ["/ruta/absoluta/a/fastapi-vanilla-js/mcp.js"]
     }
   }
 }
