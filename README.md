@@ -42,7 +42,7 @@ app.post('/signup', (req) => {
             address: { type: 'object', properties: { city: { type: 'string', required: true } } }
         }
     },
-    responseModel: {                    // la respuesta solo expone id y email (password NO se filtra)
+    responseModel: {                    // la respuesta solo expone id y email (password se excluye)
         type: 'object',
         properties: { id: { type: 'integer' }, email: { type: 'string' } }
     }
