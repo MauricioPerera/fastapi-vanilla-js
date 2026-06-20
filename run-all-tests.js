@@ -42,6 +42,9 @@ async function start() {
     // 3b. Suite unitaria del Document Store (caminos no cubiertos por integración)
     const docStoreSuccess = await runNodeTest('DOCUMENT STORE (unitario)', ['test-docstore.js']);
 
+    // 3c. Suite unitaria del Vector Store (backends, BM25, híbrido, IVF, math)
+    const vectorStoreSuccess = await runNodeTest('VECTOR STORE (unitario)', ['test-vectorstore.js']);
+
     // 4. Ejecutar Suite de Validación tipada + response_model (verificada con gate CCDD)
     const validationSuccess = await runNodeTest('VALIDATION + response_model (CCDD GATE + pipeline)', [
         'ccdd/validation/test_validate.js',
@@ -86,9 +89,15 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite Document Store (test-docstore.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (vectorStoreSuccess) {
+        console.log(`🟢 \x1b[1mSuite Vector Store (test-vectorstore.js)\x1b[0m: \x1b[32m✓ PASSED (10/10 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Vector Store (test-vectorstore.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && docStoreSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && docStoreSuccess && vectorStoreSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);
