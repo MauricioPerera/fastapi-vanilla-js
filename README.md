@@ -155,7 +155,7 @@ Para integrarlo directamente en tu cliente de **Claude Desktop**:
 El toolkit incluye baterías completas de pruebas automatizadas nativas y clientes locales interactivos para verificar cada componente de red de forma local.
 
 ### 1. Batería Completa de Tests
-Ejecuta las **88 pruebas nativas** de forma secuencial:
+Ejecuta las **102 pruebas nativas** de forma secuencial:
 ```bash
 npm test
 ```
@@ -163,6 +163,7 @@ npm test
 *   **Suite Edge Cloudflare** (`test-edge.js`): 19/19 aprobados.
 *   **Suite FastMCP Server** (`test-mcp.js`): 12/12 aprobados.
 *   **Suite Validación CCDD** (`ccdd/`): 34/34 aprobados — `validate`/`serialize`/`coerce` (property-tests congelados) + integración del pipeline (`model`/`responseModel`/`coerce`) en Node y Edge.
+*   **Suite Document Store** (`test-docstore.js`): 14/14 aprobados — operadores de update, lookups por índice (hash/sorted), cursor (sort/skip/limit/proyección), aggregation pipeline, política de contraseñas y validación de columnas.
 
 > Estas mismas baterías se ejecutan automáticamente en **CI (GitHub Actions)** sobre Node 20 y 22 en cada push a `master` y en cada Pull Request (`.github/workflows/tests.yml`). El runner devuelve código de salida `1` ante cualquier fallo, por lo que un PR roto queda en rojo.
 
