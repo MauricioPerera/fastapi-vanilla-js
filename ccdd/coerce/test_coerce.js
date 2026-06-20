@@ -15,12 +15,20 @@ test('integer', () => {
   assert.strictEqual(coerce('5.5', { type: 'integer' }), '5.5');
 });
 
-test('boolean', () => {
+test('boolean incluye numéricos 1 y 0', () => {
   assert.strictEqual(coerce('true', { type: 'boolean' }), true);
   assert.strictEqual(coerce('false', { type: 'boolean' }), false);
   assert.strictEqual(coerce('1', { type: 'boolean' }), true);
   assert.strictEqual(coerce('0', { type: 'boolean' }), false);
+  assert.strictEqual(coerce(1, { type: 'boolean' }), true);
+  assert.strictEqual(coerce(0, { type: 'boolean' }), false);
   assert.strictEqual(coerce('x', { type: 'boolean' }), 'x');
+});
+
+test('guard: schema objeto pero value no-objeto se devuelve igual', () => {
+  const schema = { type: 'object', properties: { a: { type: 'number' } } };
+  assert.strictEqual(coerce(42, schema), 42);
+  assert.strictEqual(coerce('abc', schema), 'abc');
 });
 
 test('string desde number/boolean', () => {
