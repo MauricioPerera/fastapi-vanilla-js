@@ -1,5 +1,7 @@
 # FastAPI & FastMCP Vanilla JS (Toolkit Híbrido)
 
+[![Tests](https://github.com/MauricioPerera/fastapi-vanilla-js/actions/workflows/tests.yml/badge.svg)](https://github.com/MauricioPerera/fastapi-vanilla-js/actions/workflows/tests.yml)
+
 Una reinterpretación **Clean Room** y unificada de las arquitecturas declarativas de **FastAPI** y **FastMCP** (PrefectHQ) implementadas en **Vanilla JavaScript** con **cero dependencias externas**.
 
 Este toolkit híbrido te permite escribir microservicios de alto rendimiento que funcionan simultáneamente como:
@@ -40,16 +42,28 @@ Este toolkit híbrido te permite escribir microservicios de alto rendimiento que
 ├── lib/
 │   ├── fastapi.js           # Núcleo del microframework API para Node.js.
 │   ├── fastapi-edge.js      # Núcleo del microframework API para el Edge.
-│   └── fastmcp.js           # Núcleo del microframework Model Context Protocol (stdio/SSE).
+│   ├── fastmcp.js           # Núcleo del microframework Model Context Protocol (stdio/SSE).
+│   ├── mcp-features.js      # Registro de recursos, herramientas y prompts del sistema MCP.
+│   ├── mcp-fastapi-bridge.js# Traduce rutas REST a herramientas MCP nativas (llamada en proceso).
+│   ├── js-doc-store.js      # Document store estilo MongoDB (queries, índices, aggregation).
+│   └── js-vector-store.js   # Vector store (Float32/Int8/Binary/Polar, IVF K-means, híbrido BM25).
 ├── schemas/
 │   └── item.schema.js       # Esquemas de validación de datos.
 ├── dependencies/
-│   └── auth.js              # Resolvedores de inyección de dependencias de seguridad.
+│   ├── auth.js              # Resolvedor de inyección de dependencias de seguridad (JWT + bypass dev).
+│   ├── db.js                # Instancia del Document Store persistente.
+│   └── vector.js            # Instancia del Vector Store y utilidades de cifrado.
 ├── routers/
 │   ├── users.js             # Enrutador modular de /users.
-│   └── items.js             # Enrutador modular seguro de /items.
-└── functions/
-    └── [[path]].js          # Enrutador comodín para Cloudflare Pages Functions.
+│   ├── items.js             # Enrutador modular seguro de /items.
+│   ├── cpts.js              # Enrutador de tipos de contenido dinámicos (CPT) y esquemas.
+│   ├── vectors.js           # Enrutador del motor vectorial (/vectors).
+│   └── chat.js              # Enrutador de chat/streaming.
+├── functions/
+│   └── [[path]].js          # Enrutador comodín para Cloudflare Pages Functions.
+└── .github/
+    └── workflows/
+        └── tests.yml        # CI: batería de pruebas en GitHub Actions (Node 20 y 22).
 ```
 
 ---
@@ -108,13 +122,15 @@ Para integrarlo directamente en tu cliente de **Claude Desktop**:
 El toolkit incluye baterías completas de pruebas automatizadas nativas y clientes locales interactivos para verificar cada componente de red de forma local.
 
 ### 1. Batería Completa de Tests
-Ejecuta las **27 pruebas de integración nativas** de forma secuencial:
+Ejecuta las **53 pruebas de integración nativas** de forma secuencial:
 ```bash
 npm test
 ```
-*   **Suite Node.js** (`test.js`): 10/10 aprobados.
-*   **Suite Edge Cloudflare** (`test-edge.js`): 9/9 aprobados.
-*   **Suite FastMCP Server** (`test-mcp.js`): 8/8 aprobados.
+*   **Suite Node.js** (`test.js`): 22/22 aprobados.
+*   **Suite Edge Cloudflare** (`test-edge.js`): 19/19 aprobados.
+*   **Suite FastMCP Server** (`test-mcp.js`): 12/12 aprobados.
+
+> Estas mismas baterías se ejecutan automáticamente en **CI (GitHub Actions)** sobre Node 20 y 22 en cada push a `master` y en cada Pull Request (`.github/workflows/tests.yml`). El runner devuelve código de salida `1` ante cualquier fallo, por lo que un PR roto queda en rojo.
 
 ### 2. Clientes Interactivos de Prueba
 *   **Cliente Local Stdio**: Simula el intercambio de tramas JSON-RPC línea a línea tal y como lo haría Claude Desktop:
@@ -133,3 +149,16 @@ npm test
 *   **Evita el uso de Dependencias**: Mantén el proyecto 100% auditable para eliminar vulnerabilidades heredadas.
 *   **Directory Traversal**: Los servidores de archivos estáticos (`serveStatic`) y las herramientas de guardado de logs (`guardar_log`) utilizan `path.resolve` y verificación de pertenencia para impedir el escape de directorios locales.
 *   **Logs y STDERR**: Toda la telemetría del servidor MCP se dirige a `stderr`, manteniendo el canal `stdout` exclusivamente reservado para las tramas JSON-RPC 2.0.
+
+### Autenticación y configuración de producción
+
+El resolvedor `getCurrentUser` (`dependencies/auth.js`) valida JWT firmados con Web Crypto. Su comportamiento depende del entorno:
+
+| Variable | Desarrollo (por defecto) | Producción (`NODE_ENV=production`) |
+| --- | --- | --- |
+| **Secreto de firma JWT** | Usa `dev-insecure-jwt-secret` si no defines `API_SECRET_TOKEN`. | **`API_SECRET_TOKEN` es obligatorio**: el arranque falla (throw) si no está definido. |
+| **Bypass de desarrollo** | El token `Bearer super-secret-token` concede rol `administrator` (para los tests). | **Deshabilitado**. Solo se aceptan JWT válidos. |
+
+> ⚠️ **Antes de desplegar**: define `API_SECRET_TOKEN` con un valor secreto y único, y ejecuta con `NODE_ENV=production`. Así se desactiva el bypass de desarrollo y se garantiza que la firma JWT no use un secreto público conocido.
+
+*   **Llamadas internas de confianza (MCP bridge)**: `mcp-fastapi-bridge.js` invoca los handlers REST en proceso inyectando un principal de confianza vía `req.internalAuth`. Esta propiedad **no es alcanzable desde la red** (las peticiones HTTP solo aportan cabeceras), por lo que no constituye un bypass explotable externamente.
