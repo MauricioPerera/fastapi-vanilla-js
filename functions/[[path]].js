@@ -33,14 +33,19 @@ let stores;
 
 function ensureDbAndAuth(env) {
     if (!db) {
+        // Secreto JWT: obligatorio salvo en desarrollo (ALLOW_DEV_BYPASS=1). Falla-cerrado:
+        // sin secreto ni flag de dev, no se arranca (evita usar un secreto público conocido).
+        const allowBypass = !!(env && env.ALLOW_DEV_BYPASS === '1');
+        const secret = (env && env.API_SECRET_TOKEN) || (allowBypass ? 'dev-insecure-pages-secret' : null);
+        if (!secret) {
+            throw new Error("API_SECRET_TOKEN es obligatorio (o ALLOW_DEV_BYPASS=1 en desarrollo).");
+        }
         if (env && env.MY_KV) {
             db = new DocStore(new DocKVAdapter(env.MY_KV, 'db/'));
         } else {
             db = new DocStore(new DocMemoryAdapter());
         }
-        auth = new Auth(db, {
-            secret: env.API_SECRET_TOKEN || 'pages-secret-token'
-        });
+        auth = new Auth(db, { secret });
         globalThis.db = db;
     }
     if (!stores) {
@@ -163,8 +168,8 @@ const getPagesUser = async (request, env, ctx) => {
     }
     const token = authHeader.split(' ')[1];
     
-    // Bypass de desarrollo para tests retrocompatibles
-    if (token === 'pages-secret-token') {
+    // Bypass de desarrollo: SOLO si env.ALLOW_DEV_BYPASS === '1' (deshabilitado en producción).
+    if (env && env.ALLOW_DEV_BYPASS === '1' && token === 'pages-secret-token') {
         return { username: "pages_developer", role: "admin" };
     }
 
