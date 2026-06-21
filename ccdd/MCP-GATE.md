@@ -39,14 +39,14 @@ Cualquier ERROR ⇒ veredicto **FAIL**. (Hay además umbrales WARN no bloqueante
 
 ## Cómo arreglar un FAIL (reshape task-oriented)
 
-El gate **audita**, no reescribe el bridge. Para que pase, rediseñá la superficie por *tarea*, no por
+El gate **audita**, no reescribe el bridge. Para que pase, rediseña la superficie por *tarea*, no por
 endpoint:
 
 - **CRUD → `find_X` / `upsert_X` / `remove_X`** por entidad, en vez de get/post/put/delete sueltos.
 - **Familias `search_*` → una sola tool** con un parámetro `mode: enum[...]`.
-- **Documentá las propiedades** (`description`) y estructurá los filtros en objetos en vez de muchos
+- **Documenta las propiedades** (`description`) y estructura los filtros en objetos en vez de muchos
   opcionales planos.
-- Si dos tools son una **familia real** indistinguible a propósito, declarálas con `x-variant-of` mutuo.
+- Si dos tools son una **familia real** indistinguible a propósito, decláralas con `x-variant-of` mutuo.
 
 ## Archivos
 
