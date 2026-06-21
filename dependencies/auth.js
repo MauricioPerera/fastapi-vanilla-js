@@ -82,9 +82,33 @@ const getCurrentUser = async (req, res) => {
     return user;
 };
 
+// Decide si un principal es administrador. Tolera las dos formas que conviven en el código:
+// usuarios reales con `roles: [...]` (array, valor 'admin') y principals efímeros
+// (bypass de dev, bridge MCP) con `role: 'administrator'` (string).
+function _isAdmin(user) {
+    if (!user) return false;
+    if (Array.isArray(user.roles) && user.roles.includes('admin')) return true;
+    return user.role === 'administrator' || user.role === 'admin';
+}
+
+/**
+ * Resolver (Depends) que AUTORIZA además de autenticar: exige rol de administrador.
+ * Úsalo en endpoints privilegiados (gestión de usuarios, borrado de colecciones, CPTs).
+ * getCurrentUser por sí solo solo autentica — cualquier usuario logueado pasaría.
+ */
+const requireAdmin = async (req, res) => {
+    const user = await getCurrentUser(req, res); // autentica (responde 401/403 y lanza si falla)
+    if (!_isAdmin(user)) {
+        res.json({ detail: "Prohibido. Se requiere rol de administrador." }, 403);
+        throw new UnauthorizedError("Se requiere rol de administrador");
+    }
+    return user;
+};
+
 module.exports = {
     auth,
     ensureAuthInit,
     getCurrentUser,
+    requireAdmin,
     UnauthorizedError
 };
