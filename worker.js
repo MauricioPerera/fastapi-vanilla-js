@@ -1,6 +1,7 @@
 import { FastAPI, APIRouter } from './lib/fastapi-edge.js';
 import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth, Table } from './lib/js-doc-store.js';
 import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore, MemoryStorageAdapter, CloudflareKVAdapter } from './lib/js-vector-store.js';
+import { FastMCPEdge } from './lib/fastmcp-edge.js';
 
 // 1. Inicialización de la Aplicación en el Edge con CORS
 const app = new FastAPI({
@@ -1165,9 +1166,120 @@ app.get('/', (request) => {
     };
 });
 
+// ----------------------------------------------------------------------------
+// SERVIDOR MCP (Streamable HTTP, stateless) sobre el data layer del Worker.
+// Expone el motor de datos (DocStore + VectorStore sobre KV) como herramientas MCP.
+// Endpoint: POST /mcp  -> JSON-RPC 2.0.  Solo usa producto Workers (apto temporal).
+// ----------------------------------------------------------------------------
+const mcp = new FastMCPEdge("FastMCP-Edge-Toolkit", { version: "2.0.0" });
+
+mcp.tool(
+    "system_status",
+    "Estado del servidor MCP en el edge: nombre, versión, conteo de herramientas y si hay KV persistente.",
+    { type: "object", properties: {}, additionalProperties: false },
+    async (_args, { env }) => {
+        ensureDbAndAuth(env);
+        return {
+            servidor: "FastMCP-Edge-Toolkit",
+            runtime: "Cloudflare Workers",
+            persistencia: (env && env.MY_KV) ? "KV" : "memoria (efímera)",
+            herramientas: mcp.tools.size,
+            colecciones_doc: Array.from(db._collections.keys())
+        };
+    }
+);
+
+mcp.tool(
+    "list_items",
+    "Lista los ítems del catálogo almacenados en el DocStore.",
+    { type: "object", properties: {}, additionalProperties: false },
+    async (_args, { env }) => {
+        ensureDbAndAuth(env);
+        await ensureCptsPreloaded(env);
+        const items = db.collection('items').find({}).toArray();
+        return { conteo: items.length, items };
+    }
+);
+
+mcp.tool(
+    "create_item",
+    "Crea un ítem validado en el catálogo (nombre, precio, en_oferta) y lo persiste en KV.",
+    {
+        type: "object",
+        properties: {
+            nombre: { type: "string" },
+            precio: { type: "number" },
+            en_oferta: { type: "boolean" }
+        },
+        required: ["nombre", "precio"],
+        additionalProperties: false
+    },
+    async (args, { env }) => {
+        ensureDbAndAuth(env);
+        await ensureCptsPreloaded(env);
+        const schemaDoc = db.collection('_cpt_schemas').findById('items') || {
+            columns: [
+                { name: 'nombre', type: 'text', required: true },
+                { name: 'precio', type: 'number', required: true },
+                { name: 'en_oferta', type: 'checkbox', required: false }
+            ]
+        };
+        const table = new Table(db, 'items', { columns: schemaDoc.columns });
+        const col = db.collection('items');
+        const defaulted = table._applyDefaults(args);
+        table._validate(defaulted);
+        const inserted = col.insert({ ...defaulted, creado_en: Date.now() });
+        col.flush();
+        return { mensaje: "Ítem creado", item: inserted };
+    }
+);
+
+mcp.tool(
+    "vector_search",
+    "Búsqueda semántica en una colección del VectorStore (vector de 768 dimensiones).",
+    {
+        type: "object",
+        properties: {
+            collection: { type: "string" },
+            vector: { type: "array", items: { type: "number" } },
+            limit: { type: "number" }
+        },
+        required: ["collection", "vector"],
+        additionalProperties: false
+    },
+    async (args, { env }) => {
+        ensureDbAndAuth(env);
+        const store = stores.float32;
+        if (!Array.isArray(args.vector) || args.vector.length !== store.dim) {
+            throw new Error(`El vector debe tener ${store.dim} dimensiones.`);
+        }
+        await preloadVectorCol(store, args.collection, env);
+        const results = store.search(args.collection, args.vector, args.limit || 5, 0, 'cosine');
+        return { collection: args.collection, resultados: results };
+    }
+);
+
+mcp.resource(
+    "sistema://estado",
+    "Estado del motor de datos en el edge",
+    "Conteo de colecciones documentales y vectoriales activas.",
+    "application/json",
+    async (_params, { env }) => {
+        ensureDbAndAuth(env);
+        const vcols = await stores.float32.listCollections();
+        return { doc_collections: Array.from(db._collections.keys()), vector_collections: vcols };
+    }
+);
+
 // 5. EXPORTACIÓN DEL MANEJADOR FETCH OFICIAL DE CLOUDFLARE WORKERS
 export default {
     async fetch(request, env, ctx) {
+        // Interceptar el endpoint MCP ANTES del router REST.
+        const _url = new URL(request.url);
+        if (_url.pathname === '/mcp') {
+            return mcp.handleStreamableHTTP(request, { env, ctx });
+        }
+
         const response = await app.handle(request, env, ctx);
         // Persistir base de datos y almacenes vectoriales al final del request en el Edge
         if (db && db._adapter && typeof db._adapter.persist === 'function') {
