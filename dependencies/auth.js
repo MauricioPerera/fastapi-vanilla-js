@@ -87,8 +87,9 @@ const getCurrentUser = async (req, res) => {
 // (bypass de dev, bridge MCP) con `role: 'administrator'` (string).
 function _isAdmin(user) {
     if (!user) return false;
-    if (Array.isArray(user.roles) && user.roles.includes('admin')) return true;
-    return user.role === 'administrator' || user.role === 'admin';
+    const adminRoles = ['admin', 'administrator'];
+    if (Array.isArray(user.roles) && user.roles.some(r => adminRoles.includes(r))) return true;
+    return adminRoles.includes(user.role);
 }
 
 /**
