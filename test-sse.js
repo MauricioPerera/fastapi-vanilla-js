@@ -17,7 +17,11 @@ test.before(async () => {
   registerSystemFeatures(mcp);
   mcp.setupSSE(app);
   server = app.listen(PORT);
-  await new Promise(resolve => { server.listening ? resolve() : server.once('listening', resolve); });
+  await new Promise((resolve, reject) => {
+    if (server.listening) return resolve();
+    server.once('listening', resolve);
+    server.once('error', reject); // p.ej. puerto en uso -> falla rápido en vez de colgar
+  });
 });
 
 test.after(() => { if (server) server.close(); });
@@ -28,13 +32,19 @@ async function readUntil(reader, decoder, state, regex, ms = 5000) {
   for (;;) {
     const m = state.buffer.match(regex);
     if (m) return m;
-    if (Date.now() > deadline) throw new Error(`Timeout esperando SSE: ${regex}`);
-    const chunk = await Promise.race([
-      reader.read(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('read timeout')), deadline - Date.now())),
-    ]);
-    if (chunk.done) throw new Error('stream SSE cerrado inesperadamente');
-    state.buffer += decoder.decode(chunk.value, { stream: true });
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error(`Timeout esperando SSE: ${regex}`);
+    let timeoutId;
+    const timeoutPromise = new Promise((_, rej) => {
+      timeoutId = setTimeout(() => rej(new Error('read timeout')), remaining);
+    });
+    try {
+      const chunk = await Promise.race([reader.read(), timeoutPromise]);
+      if (chunk.done) throw new Error('stream SSE cerrado inesperadamente');
+      state.buffer += decoder.decode(chunk.value, { stream: true });
+    } finally {
+      clearTimeout(timeoutId); // evita fugar timers entre iteraciones
+    }
   }
 }
 
@@ -43,6 +53,7 @@ test('SSE: handshake (endpoint) + POST /message + respuesta por el stream', asyn
   try {
     const sse = await fetch(`${BASE}/sse`, { signal: ac.signal });
     assert.strictEqual(sse.headers.get('content-type'), 'text/event-stream');
+    assert.ok(sse.body, 'El cuerpo de la respuesta SSE no debe ser nulo');
     const reader = sse.body.getReader();
     const decoder = new TextDecoder();
     const state = { buffer: '' };
