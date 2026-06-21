@@ -161,6 +161,7 @@ Workers, es desplegable **sin login en una cuenta temporal** (`wrangler deploy -
 
 📄 **Guía completa, requisitos y límites:** [`docs/cuentas-temporales-cloudflare.md`](docs/cuentas-temporales-cloudflare.md)
 📄 **Desplegar vía el MCP de Cloudflare (sin Wrangler ni login):** [`docs/despliegue-via-mcp-cloudflare.md`](docs/despliegue-via-mcp-cloudflare.md)
+📄 **Controles de seguridad y coste del `/mcp` (auth, rate-limit, tope, kill switch):** [`docs/controles-seguridad-mcp.md`](docs/controles-seguridad-mcp.md)
 
 ---
 
