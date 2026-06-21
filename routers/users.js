@@ -1,5 +1,5 @@
 const { APIRouter } = require('../lib/fastapi');
-const { auth, ensureAuthInit, getCurrentUser } = require('../dependencies/auth');
+const { auth, ensureAuthInit, getCurrentUser, requireAdmin } = require('../dependencies/auth');
 
 const userRouter = new APIRouter({
     prefix: '/users',
@@ -82,7 +82,7 @@ userRouter.post('/', async (req, res, deps) => {
 }, {
     summary: "Crear Usuario Admin",
     description: "Permite a un operador crear un nuevo usuario con roles y metadatos personalizados.",
-    dependencies: { user: getCurrentUser }
+    dependencies: { user: requireAdmin }
 });
 
 // 4. Actualizar Usuario por ID (PUT) seguro
@@ -128,7 +128,7 @@ userRouter.put('/:id', async (req, res, deps) => {
 }, {
     summary: "Actualizar Usuario",
     description: "Permite actualizar propiedades del core y dinámicas de un usuario por su ID.",
-    dependencies: { user: getCurrentUser }
+    dependencies: { user: requireAdmin }
 });
 
 // 5. Eliminar Usuario por ID (DELETE) seguro
@@ -157,7 +157,7 @@ userRouter.delete('/:id', async (req, res, deps) => {
 }, {
     summary: "Eliminar Usuario",
     description: "Elimina permanentemente a un usuario e invalida sus tokens de sesión.",
-    dependencies: { user: getCurrentUser }
+    dependencies: { user: requireAdmin }
 });
 
 module.exports = userRouter;
