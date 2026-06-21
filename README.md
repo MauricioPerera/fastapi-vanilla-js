@@ -153,6 +153,14 @@ Para integrarlo directamente en tu cliente de **Claude Desktop**:
     ```
     *Enlace de producción asignado*: `https://fastapi-vanilla-js.pages.dev`
 
+### D. Servidor MCP en el Edge (`POST /mcp`) y cuentas temporales de Cloudflare
+
+`worker.js` expone un servidor **MCP (Streamable HTTP, stateless)** en `POST /mcp`, implementado
+en [`lib/fastmcp-edge.js`](lib/fastmcp-edge.js) sin dependencias de Node. Como solo usa el producto
+Workers, es desplegable **sin login en una cuenta temporal** (`wrangler deploy --temporary`).
+
+📄 **Guía completa, requisitos y límites:** [`docs/cuentas-temporales-cloudflare.md`](docs/cuentas-temporales-cloudflare.md)
+
 ---
 
 ## 📊 Ejecución de Pruebas y Clientes Interactivos
