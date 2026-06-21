@@ -21,7 +21,7 @@ const HTTP = ['get', 'post', 'put', 'patch', 'delete'];
 
 // ---- $ref inline con guarda de ciclo (paridad con openapi_to_doc.py) ----------------
 function resolveRef(spec, ref) {
-    const parts = ref.slice(2).split('/');
+    const parts = ref.slice(2).split('/').map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'));
     let n = spec;
     for (const p of parts) {
         if (!n || typeof n !== 'object' || !(p in n)) return null;
@@ -57,7 +57,7 @@ function inputSchema(op, item, spec) {
     const params = (item.parameters || []).concat(op.parameters || []);
     for (let p of params) {
         p = deref(p, spec, []);
-        if (typeof p.name !== 'string') continue;
+        if (!p || typeof p.name !== 'string') continue;
         let sch = deref(p.schema || {}, spec, []);
         if (typeof p.description === 'string' && !('description' in sch)) sch = Object.assign({ description: p.description }, sch);
         props[p.name] = sch;
@@ -110,7 +110,8 @@ function buildTree(s) {
     }
     if (k === 'combinator') {
         const name = ['oneOf', 'anyOf', 'allOf'].find((c) => c in s);
-        return { kind: 'combinator', type: null, children: (s[name] || []).map(buildTree) };
+        const list = Array.isArray(s[name]) ? s[name] : [];
+        return { kind: 'combinator', type: null, children: list.map(buildTree) };
     }
     if (k === 'object') {
         const props = (s.properties && typeof s.properties === 'object') ? s.properties : {};
@@ -163,7 +164,12 @@ module.exports = { gate, toolsFromOpenAPI, buildTree, allFingerprints, jShape };
 // CLI: node aacs-lite.js openapi.json
 if (require.main === module) {
     const fs = require('fs');
-    const spec = JSON.parse(fs.readFileSync(process.argv[2], 'utf-8'));
+    const filePath = process.argv[2];
+    if (!filePath) {
+        console.error('Uso: node aacs-lite.js <path-to-openapi.json>');
+        process.exit(1);
+    }
+    const spec = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     const r = gate(toolsFromOpenAPI(spec, true));
     console.log(JSON.stringify(r, null, 1));
     process.exit(r.verdict === 'PASS' ? 0 : 1);
