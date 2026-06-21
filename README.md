@@ -64,9 +64,14 @@ Un body inválido responde `422` con `{ detail, errors: [{ path, message }] }`, 
 ├── client.js                # Cliente de pruebas interactivo para el MCP local (stdio).
 ├── client-sse.js            # Cliente de pruebas interactivo para el MCP de red (SSE/HTTP).
 ├── run-all-tests.js         # Orquestador unificado de las baterías de pruebas.
-├── test.js                  # Suite de pruebas nativas para el Servidor REST local.
-├── test-edge.js             # Suite de pruebas nativas para el Edge Worker.
-├── test-mcp.js              # Suite de pruebas nativas para el Servidor MCP (stdio).
+├── test.js                  # Suite de integración del Servidor REST local.
+├── test-edge.js             # Suite de integración del Edge Worker (mocks V8).
+├── test-mcp.js              # Suite del Servidor MCP por stdio (proceso spawneado).
+├── test-docstore.js         # Suite unitaria del Document Store (updates, índices, cursor, aggregation, auth).
+├── test-vectorstore.js      # Suite unitaria del Vector Store (4 backends, BM25, híbrido, IVF, math).
+├── test-mcp-features.js     # Suite in-process de tools/resources/prompts del sistema MCP.
+├── test-routers.js          # Suite HTTP de los routers /users (CRUD) y /chat.
+├── test-sse.js              # Suite del transporte SSE de FastMCP (handshake + /message).
 ├── lib/
 │   ├── fastapi.js           # Núcleo del microframework API para Node.js.
 │   ├── fastapi-edge.js      # Núcleo del microframework API para el Edge.
