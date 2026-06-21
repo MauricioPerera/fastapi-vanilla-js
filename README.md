@@ -203,6 +203,15 @@ El resolvedor `getCurrentUser` (`dependencies/auth.js`) valida JWT firmados con 
 | **Secreto de firma JWT** | Usa `dev-insecure-jwt-secret` si no defines `API_SECRET_TOKEN`. | **`API_SECRET_TOKEN` es obligatorio**: el arranque falla (throw) si no está definido. |
 | **Bypass de desarrollo** | El token `Bearer super-secret-token` concede rol `administrator` (para los tests). | **Deshabilitado**. Solo se aceptan JWT válidos. |
 
-> ⚠️ **Antes de desplegar**: define `API_SECRET_TOKEN` con un valor secreto y único, y ejecuta con `NODE_ENV=production`. Así se desactiva el bypass de desarrollo y se garantiza que la firma JWT no use un secreto público conocido.
+> ⚠️ **Antes de desplegar (Node)**: define `API_SECRET_TOKEN` con un valor secreto y único, y ejecuta con `NODE_ENV=production`. Así se desactiva el bypass de desarrollo y se garantiza que la firma JWT no use un secreto público conocido.
+
+**Edge (Cloudflare Workers / Pages)** — `worker.js` y `functions/[[path]].js` siguen el mismo principio falla-cerrado, gobernado por variables de entorno del binding:
+
+| Variable de entorno | Efecto |
+| --- | --- |
+| `API_SECRET_TOKEN` | Secreto de firma JWT. **Obligatorio**: sin él (y sin `ALLOW_DEV_BYPASS`), el worker responde error y no procesa peticiones autenticadas. |
+| `ALLOW_DEV_BYPASS=1` | **Solo desarrollo/tests.** Habilita el token de bypass (`Bearer edge-secret-token` / `pages-secret-token` → admin) y un secreto de firma de desarrollo. **No lo definas en producción.** |
+
+> ⚠️ **En producción (Edge)**: define `API_SECRET_TOKEN` y **NO** definas `ALLOW_DEV_BYPASS`. Así los tokens de bypass públicos quedan inertes y la firma JWT usa tu secreto.
 
 *   **Llamadas internas de confianza (MCP bridge)**: `mcp-fastapi-bridge.js` invoca los handlers REST en proceso inyectando un principal de confianza vía `req.internalAuth`. Esta propiedad **no es alcanzable desde la red** (las peticiones HTTP solo aportan cabeceras), por lo que no constituye un bypass explotable externamente.

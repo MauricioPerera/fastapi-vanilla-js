@@ -5,8 +5,9 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
     // Importamos dinámicamente worker.js ya que se define como un Módulo ES (ESM)
     const { default: worker } = await import('./worker.js');
 
-    // Mocks de entorno y contexto de Cloudflare
-    const env = {};
+    // Mocks de entorno y contexto de Cloudflare.
+    // ALLOW_DEV_BYPASS habilita el token de desarrollo (en producción NO se define).
+    const env = { ALLOW_DEV_BYPASS: '1' };
     const ctx = {
         waitUntil: (promise) => promise
     };
@@ -326,6 +327,7 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         const encryptedEnv = {
             MY_KV: env.MY_KV,
             API_SECRET_TOKEN: env.API_SECRET_TOKEN,
+            ALLOW_DEV_BYPASS: '1',
             ENCRYPTION_KEY: "edge-super-secret-password-xyz"
         };
 
