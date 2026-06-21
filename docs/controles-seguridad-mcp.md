@@ -6,7 +6,15 @@ apagados por defecto**: si no defines las variables/bindings, el `/mcp` se compo
 abierto (igual que antes). Activas solo lo que necesites.
 
 Aplican en `POST /mcp`, **antes** de procesar el JSON-RPC, en este orden:
-**kill switch → auth → rate-limit → tope diario**.
+**kill switch estático → auth → kill switch KV → rate-limit → tope diario**.
+
+Dos decisiones de diseño:
+- **La auth se valida antes de tocar KV** (solo lee env vars). Así la auth no depende de que KV
+  esté disponible y el tráfico anónimo **no genera lecturas de KV** (evita amplificación de
+  coste/DoS sobre tu namespace).
+- Los controles con I/O (KV / rate-limiter) son **fail-open**: si el backend falla de forma
+  transitoria, se registra y se deja pasar, para no tumbar el MCP ni devolver un 500. La barrera
+  de auth no se relaja porque va antes del bloque con I/O.
 
 > Recordatorio: sobre `*.workers.dev` **no hay WAF/Access del dashboard** (eso requiere dominio
 > propio). Por eso estos controles van **en el código del Worker** y se activan por configuración.

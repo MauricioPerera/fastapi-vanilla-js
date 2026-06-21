@@ -126,7 +126,7 @@ async function start() {
     }
 
     if (mcpGuardSuccess) {
-        console.log(`🟢 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[32m✓ PASSED (11/11 pruebas exitosas)\x1b[0m`);
+        console.log(`🟢 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[32m✓ PASSED (13/13 pruebas exitosas)\x1b[0m`);
     } else {
         console.log(`🔴 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }

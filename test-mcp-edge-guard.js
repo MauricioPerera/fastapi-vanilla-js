@@ -92,6 +92,22 @@ test('Controles del MCP edge (_guard)', async (t) => {
         assert.strictEqual(res.status, 429);
     });
 
+    await t.test('Auth I/O-independiente: token inválido NO toca KV (401 sin leer KV)', async () => {
+        let kvTouched = false;
+        const kv = { get: async () => { kvTouched = true; return null; }, put: async () => { kvTouched = true; } };
+        const env = { MCP_AUTH_TOKEN: 'tok', MCP_KV: kv, MCP_DAILY_CAP: '100' };
+        const res = await mcp().handleStreamableHTTP(postReq({ Authorization: 'Bearer malo' }), { env });
+        assert.strictEqual(res.status, 401);
+        assert.strictEqual(kvTouched, false, 'la auth debe rechazar antes de leer KV');
+    });
+
+    await t.test('Fail-open: si KV lanza, el guard no tumba el MCP (200)', async () => {
+        const kv = { get: async () => { throw new Error('KV caído'); }, put: async () => {} };
+        const env = { MCP_KV: kv, MCP_DAILY_CAP: '100' };
+        const res = await mcp().handleStreamableHTTP(postReq(), { env });
+        assert.strictEqual(res.status, 200);
+    });
+
     await t.test('Combinado: auth OK + rate-limit OK + bajo cap -> 200', async () => {
         const env = {
             MCP_AUTH_TOKEN: 'tok',
