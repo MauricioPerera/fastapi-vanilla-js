@@ -160,6 +160,7 @@ en [`lib/fastmcp-edge.js`](lib/fastmcp-edge.js) sin dependencias de Node. Como s
 Workers, es desplegable **sin login en una cuenta temporal** (`wrangler deploy --temporary`).
 
 📄 **Guía completa, requisitos y límites:** [`docs/cuentas-temporales-cloudflare.md`](docs/cuentas-temporales-cloudflare.md)
+📄 **Desplegar vía el MCP de Cloudflare (sin Wrangler ni login):** [`docs/despliegue-via-mcp-cloudflare.md`](docs/despliegue-via-mcp-cloudflare.md)
 
 ---
 
