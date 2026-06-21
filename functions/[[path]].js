@@ -1,5 +1,5 @@
 import { FastAPI, APIRouter } from '../lib/fastapi-edge.js';
-import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth, Table } from '../lib/js-doc-store.js';
+import { DocStore, MemoryStorageAdapter as DocMemoryAdapter, CloudflareKVAdapter as DocKVAdapter, Auth, Table, EncryptedAdapter } from '../lib/js-doc-store.js';
 import { VectorStore, QuantizedStore, BinaryQuantizedStore, PolarQuantizedStore, MemoryStorageAdapter, CloudflareKVAdapter } from '../lib/js-vector-store.js';
 
 // 1. Inicializar la aplicación para Pages Functions
@@ -120,8 +120,8 @@ async function ensureCryptoInitialized(env) {
         const key = env && env.ENCRYPTION_KEY;
         if (key && stores) {
             const baseAdapter = stores.float32._adapter;
-            if (baseAdapter && !(baseAdapter instanceof EncryptedStorageAdapter)) {
-                const encAdapter = await EncryptedStorageAdapter.create(baseAdapter, key);
+            if (baseAdapter && !(baseAdapter instanceof EncryptedAdapter)) {
+                const encAdapter = await EncryptedAdapter.create(baseAdapter, key);
                 for (const store of Object.values(stores)) {
                     store._adapter = encAdapter;
                 }
@@ -178,6 +178,20 @@ const getPagesUser = async (request, env, ctx) => {
         throw new Error("Forbidden");
     }
     return auth.getUser(payload.sub);
+};
+
+// Autoriza por rol además de autenticar. Tolera roles:[...] (usuarios reales) y role:'admin'
+// (principals efímeros del bypass de dev). Lanza "Forbidden" (-> 403) si no es admin.
+function _isAdmin(user) {
+    if (!user) return false;
+    const adminRoles = ['admin', 'administrator'];
+    if (Array.isArray(user.roles) && user.roles.some(r => adminRoles.includes(r))) return true;
+    return adminRoles.includes(user.role);
+}
+const requirePagesAdmin = async (request, env, ctx) => {
+    const user = await getPagesUser(request, env, ctx); // autentica (lanza Unauthorized/Forbidden)
+    if (!_isAdmin(user)) throw new Error("Forbidden");
+    return user;
 };
 
 // 4. Manejo de Errores en Pages Functions
@@ -529,6 +543,7 @@ vectorRouter.get('/stats', async (request, env, ctx, deps) => {
 });
 
 vectorRouter.delete('/collections/:name', async (request, env, ctx, deps) => {
+    await requirePagesAdmin(request, env, ctx); // borrar una colección entera es operación de admin
     const col = request.params.name;
     const { store, quantization } = getEdgeStore(request);
     const cols = await store.listCollections();
@@ -574,6 +589,7 @@ cptRouter.get('/schemas', async (request, env, ctx, deps) => {
 });
 
 cptRouter.post('/schemas', async (request, env, ctx, deps) => {
+    await requirePagesAdmin(request, env, ctx); // crear un schema (estructura) es operación de admin
     const { name, columns } = request.body;
     if (!name || !Array.isArray(columns)) {
         return new Response(JSON.stringify({ detail: "Campos 'name' y 'columns' son obligatorios" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -739,6 +755,7 @@ cptRouter.put('/:collection/:id', async (request, env, ctx, deps) => {
 });
 
 cptRouter.delete('/schemas/:name', async (request, env, ctx, deps) => {
+    await requirePagesAdmin(request, env, ctx); // borrar un schema (estructura) es operación de admin
     const { name } = request.params;
 
     try {
@@ -872,9 +889,9 @@ userRouter.post('/', async (request, env, ctx, deps) => {
     ensureDbAndAuth(env);
     await ensureAuthPreloaded();
     await ensureAuthInit(env);
-    
+
     try {
-        await getPagesUser(request, env, ctx);
+        await requirePagesAdmin(request, env, ctx);
     } catch (e) {
         return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
     }
@@ -905,9 +922,9 @@ userRouter.put('/:id', async (request, env, ctx, deps) => {
     ensureDbAndAuth(env);
     await ensureAuthPreloaded();
     await ensureAuthInit(env);
-    
+
     try {
-        await getPagesUser(request, env, ctx);
+        await requirePagesAdmin(request, env, ctx);
     } catch (e) {
         return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
     }
@@ -953,9 +970,9 @@ userRouter.delete('/:id', async (request, env, ctx, deps) => {
     ensureDbAndAuth(env);
     await ensureAuthPreloaded();
     await ensureAuthInit(env);
-    
+
     try {
-        await getPagesUser(request, env, ctx);
+        await requirePagesAdmin(request, env, ctx);
     } catch (e) {
         return new Response(JSON.stringify({ detail: "No autorizado a nivel perimetral", mensaje: e.message }), { status: e.message === "Forbidden" ? 403 : 401, headers: { 'Content-Type': 'application/json' } });
     }
@@ -1130,6 +1147,7 @@ app.post('/auth/login', async (request, env, ctx) => {
 });
 
 app.get('/auth/debug-schemas', async (request, env) => {
+    if (!(env && env.ALLOW_DEV_BYPASS === '1')) return new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     ensureDbAndAuth(env);
     await ensureAuthInit(env);
     let schemas = [];
@@ -1149,6 +1167,7 @@ app.get('/auth/debug-schemas', async (request, env) => {
 });
 
 app.get('/auth/debug-env', (request, env) => {
+    if (!(env && env.ALLOW_DEV_BYPASS === '1')) return new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     return {
         keys: env ? Object.keys(env) : [],
         hasMyKv: !!(env && env.MY_KV),
