@@ -82,6 +82,30 @@ async function main() {
   console.log(`${okPost401 ? 'OK' : 'FAIL'} SIN token  POST /message -> ${postNoAuth.status} (esperado 401)`);
   if (!okPost401) failures++;
 
+  // 4. Error inesperado en getCurrentUser SIN escribir respuesta -> 500 (no colgar)
+  //    Simulamos un fallo interno (p.ej. jwt.verify con token malformado / fallo de
+  //    DB) que lanza sin escribir. El catch de _sseAuth debe cerrar con 500 genérico
+  //    y NO abrir el stream. No debe filtrar e.message al cliente.
+  const authMod = require('./dependencies/auth');
+  const origGetCurrentUser = authMod.getCurrentUser;
+  authMod.getCurrentUser = async (req, res) => {
+    // Lanza sin tocar res: simula fallo inesperado antes de escribir respuesta.
+    throw new Error('SECRETO_INTERNO_NO_FILTRAR_12345');
+  };
+  let errRes;
+  try {
+    errRes = await req('GET', '/sse', { Authorization: `Bearer ${TOKEN}` });
+  } finally {
+    authMod.getCurrentUser = origGetCurrentUser; // restaurar siempre
+  }
+  const ok500 = errRes.status === 500;
+  const bodyNotLeak = !errRes.body.includes('SECRETO_INTERNO_NO_FILTRAR_12345');
+  const bodyGeneric = errRes.body.includes('Error interno de autenticaci');
+  console.log(`${ok500 ? 'OK' : 'FAIL'} error inesperado GET /sse -> ${errRes.status} (esperado 500)`);
+  console.log(`${bodyNotLeak ? 'OK' : 'FAIL'} 500 NO filtra e.message interno`);
+  console.log(`${bodyGeneric ? 'OK' : 'FAIL'} 500 detail generico 'Error interno de autenticacion'`);
+  if (!ok500 || !bodyNotLeak || !bodyGeneric) failures++;
+
   server.close();
   if (failures > 0) {
     console.error(`\n✗ ${failures} comprobaciones fallaron`);
