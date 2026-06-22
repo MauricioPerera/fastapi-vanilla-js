@@ -9,6 +9,7 @@ const { registerSystemFeatures } = require('./lib/mcp-features');
 
 const PORT = 8995;
 const BASE = `http://localhost:${PORT}`;
+const TOKEN = 'super-secret-token'; // bypass dev (NODE_ENV != production)
 let server;
 
 test.before(async () => {
@@ -48,10 +49,19 @@ async function readUntil(reader, decoder, state, regex, ms = 5000) {
   }
 }
 
+test('SSE: sin token -> 401 (no abre el stream)', async () => {
+  // GET /sse SIN Authorization: el guard responde 401 antes de abrir el stream.
+  const res = await fetch(`${BASE}/sse`);
+  assert.strictEqual(res.status, 401);
+});
+
 test('SSE: handshake (endpoint) + POST /message + respuesta por el stream', async () => {
   const ac = new AbortController();
   try {
-    const sse = await fetch(`${BASE}/sse`, { signal: ac.signal });
+    const sse = await fetch(`${BASE}/sse`, {
+      signal: ac.signal,
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
     assert.strictEqual(sse.headers.get('content-type'), 'text/event-stream');
     assert.ok(sse.body, 'El cuerpo de la respuesta SSE no debe ser nulo');
     const reader = sse.body.getReader();
@@ -63,9 +73,10 @@ test('SSE: handshake (endpoint) + POST /message + respuesta por el stream', asyn
     const clientId = ep[1];
     assert.ok(clientId);
 
-    // 2. Enviamos un JSON-RPC por POST /message.
+    // 2. Enviamos un JSON-RPC por POST /message (con el token Bearer).
     const post = await fetch(`${BASE}/message?client=${clientId}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
     });
     assert.strictEqual(post.status, 200);
@@ -81,9 +92,18 @@ test('SSE: handshake (endpoint) + POST /message + respuesta por el stream', asyn
   }
 });
 
-test('POST /message con client desconocido → 400', async () => {
+test('POST /message sin token -> 401', async () => {
   const res = await fetch(`${BASE}/message?client=noexiste`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/list', params: {} }),
+  });
+  assert.strictEqual(res.status, 401);
+});
+
+test('POST /message con token pero client desconocido → 400', async () => {
+  const res = await fetch(`${BASE}/message?client=noexiste`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
     body: JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/list', params: {} }),
   });
   assert.strictEqual(res.status, 400);

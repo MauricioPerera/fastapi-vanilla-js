@@ -30,7 +30,10 @@ app.addMiddleware(async (req, res, next) => {
     const start = Date.now();
     await next();
     const duration = Date.now() - start;
-    console.log(`[${new Date().toISOString()}] \x1b[36m${req.method}\x1b[0m ${req.url} - Status: \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+    // Redacta el token si vino por query param (fallback SSE de navegador): nunca
+    // loguear tokens. Los tokens por header Authorization no aparecen en req.url.
+    const safeUrl = req.url.replace(/([?&])token=[^&]*/g, '$1token=<redacted>');
+    console.log(`[${new Date().toISOString()}] \x1b[36m${req.method}\x1b[0m ${safeUrl} - Status: \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
 });
 
 // 3. Manejadores de Excepciones Globales

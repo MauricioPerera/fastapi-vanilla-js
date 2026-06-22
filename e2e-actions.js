@@ -13,7 +13,7 @@ function req(method, pathStr, body) {
     const data = body ? JSON.stringify(body) : null;
     const r = http.request(BASE + pathStr, {
       method,
-      headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}
+      headers: data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'Authorization': 'Bearer super-secret-token' } : { 'Authorization': 'Bearer super-secret-token' }
     }, (res) => {
       let buf = '';
       res.on('data', (c) => buf += c);

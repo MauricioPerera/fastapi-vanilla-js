@@ -11,6 +11,7 @@ const {
 } = require('../lib/actions');
 const { RepoError } = require('../lib/gitRepos');
 const { appendEvent } = require('../lib/postal');
+const { getCurrentUser } = require('../dependencies/auth');
 
 // Directorios base (.data/ ya está en .gitignore). Mismo REPOS_DIR que routers/repos.js
 // para resolver el cwd donde se ejecutan los steps (el repo bare).
@@ -36,7 +37,8 @@ function runExitCode(run) {
 
 const actionsRouter = new APIRouter({
     prefix: '/repos',
-    tags: ['Actions']
+    tags: ['Actions'],
+    dependencies: { user: getCurrentUser }
 });
 
 // Helper: mapea ActionError/RepoError a respuesta REST con el status adecuado.

@@ -10,11 +10,15 @@ async function runSseClient() {
     console.log(`======================================================================`);
 
     const sseUrl = 'http://localhost:8999/sse';
+    // Token de bypass de dev (NODE_ENV != production). La superficie SSE exige auth
+    // (mismo modelo que los routers REST). En prod usa un JWT real via API_SECRET_TOKEN.
+    const SSE_TOKEN = 'super-secret-token';
+    const SSE_AUTH = { Authorization: `Bearer ${SSE_TOKEN}` };
     let activeClientUrl = '';
     let currentResolver = null;
 
     // 1. Abrir canal SSE (Server-Sent Events) usando http.get nativo de Node.js
-    const sseRequest = http.get(sseUrl, (res) => {
+    const sseRequest = http.get(sseUrl, { headers: SSE_AUTH }, (res) => {
         let buffer = '';
 
         res.on('data', (chunk) => {
@@ -82,7 +86,8 @@ async function runSseClient() {
                 path: postUrlObj.pathname + postUrlObj.search,
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...SSE_AUTH
                 }
             }, (res) => {
                 // Consumir el stream de respuesta HTTP para liberar sockets
@@ -124,7 +129,7 @@ async function runSseClient() {
                 port: postUrlObj.port,
                 path: postUrlObj.pathname + postUrlObj.search,
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json', ...SSE_AUTH }
             });
             postReq.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
             postReq.end();

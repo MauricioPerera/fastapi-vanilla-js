@@ -7,13 +7,17 @@ const {
     deleteRepo,
     RepoError
 } = require('../lib/gitRepos');
+const { getCurrentUser } = require('../dependencies/auth');
 
 // Directorio base donde se guardan los repos bare. .data/ ya está en .gitignore.
 const REPOS_DIR = path.join(__dirname, '..', '.data', 'repos');
 
+// HARDENING: todo endpoint (GET + escritura) exige token Bearer via getCurrentUser.
+// Reusa dependencies/auth.js (mismo patron que routers/items.js). Sin token -> 401.
 const reposRouter = new APIRouter({
     prefix: '/repos',
-    tags: ['Repos']
+    tags: ['Repos'],
+    dependencies: { user: getCurrentUser }
 });
 
 // Helper: mapea RepoError a una respuesta REST con el status adecuado.

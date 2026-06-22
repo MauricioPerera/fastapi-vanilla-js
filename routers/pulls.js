@@ -18,6 +18,7 @@ const {
 const { RepoError } = require('../lib/gitRepos');
 const { dispatchEvent } = require('../lib/actions');
 const { appendEvent } = require('../lib/postal');
+const { getCurrentUser } = require('../dependencies/auth');
 
 // Mismo directorio base que routers/issues.js (.data/ ya está en .gitignore).
 const PULLS_DIR = path.join(__dirname, '..', '.data', 'pulls');
@@ -32,9 +33,12 @@ function emitPullEvent(repoName, kind, agentId, payload) {
     appendEvent(repoName, EVENTS_DIR, { kind, agentId, payload }).catch(() => {});
 }
 
+// HARDENING: todo endpoint (GET + escritura) exige token Bearer via getCurrentUser.
+// Reusa dependencies/auth.js (mismo patron que routers/items.js). Sin token -> 401.
 const pullsRouter = new APIRouter({
     prefix: '/repos',
-    tags: ['Pulls']
+    tags: ['Pulls'],
+    dependencies: { user: getCurrentUser }
 });
 
 // Path al repo bare de un repo por nombre.
