@@ -4,6 +4,11 @@ const itemRouter = require('./routers/items');
 const vectorRouter = require('./routers/vectors');
 const cptRouter = require('./routers/cpts');
 const chatRouter = require('./routers/chat');
+const reposRouter = require('./routers/repos');
+const issuesRouter = require('./routers/issues');
+const pullsRouter = require('./routers/pulls');
+const actionsRouter = require('./routers/actions');
+const postalRouter = require('./routers/postal');
 const { UnauthorizedError } = require('./dependencies/auth');
 const path = require('path');
 const fs = require('fs');
@@ -41,6 +46,11 @@ app.includeRouter(itemRouter);
 app.includeRouter(vectorRouter);
 app.includeRouter(cptRouter);
 app.includeRouter(chatRouter);
+app.includeRouter(reposRouter);
+app.includeRouter(issuesRouter);
+app.includeRouter(pullsRouter);
+app.includeRouter(actionsRouter);
+app.includeRouter(postalRouter);
 
 // 4.1 Endpoints nativos de Autenticación con js-doc-store
 const { auth, ensureAuthInit } = require('./dependencies/auth');
@@ -140,6 +150,8 @@ app.post('/auth/login', async (req, res) => {
 // 4.5 Integración del Servidor Model Context Protocol (FastMCP) sobre HTTP/SSE
 const { FastMCP } = require('./lib/fastmcp');
 const { registerSystemFeatures } = require('./lib/mcp-features');
+const { registerGitTools } = require('./lib/mcp-git-tools');
+const { registerActionsPostalTools } = require('./lib/mcp-actions-postal-tools');
 
 const mcp = new FastMCP("FastMCP-API-Toolkit-SSE", {
     version: "2.0.0"
@@ -147,6 +159,12 @@ const mcp = new FastMCP("FastMCP-API-Toolkit-SSE", {
 
 // Registrar recursos, herramientas y prompts compartidos
 registerSystemFeatures(mcp);
+
+// Registrar tools adaptadoras de repos / issues / pull requests (MCP-TOOLS-PLAN.md)
+registerGitTools(mcp);
+
+// Registrar tools adaptadoras de actions / postal (MCP-TOOLS-PLAN.md, chunk B)
+registerActionsPostalTools(mcp);
 
 // Vincular los endpoints SSE de FastMCP en la instancia de nuestra API
 mcp.setupSSE(app);
