@@ -12,7 +12,8 @@
     "test:node": "node test.js",
     "test:edge": "node test-edge.js",
     "test:mcp": "node test-mcp.js",
-    "mcp:gate": "node ccdd/mcp-gate.js"
+    "mcp:gate": "node ccdd/mcp-gate.js",
+    "mcp:gate:tools": "node ccdd/mcp-tools-gate.js"
   },
   "keywords": [
     "fastapi",

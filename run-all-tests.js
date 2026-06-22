@@ -27,6 +27,76 @@ function runNodeTest(name, files) {
     });
 }
 
+// Corre un script e2e-*.js con env adicional (ej: E2E_PORT). Devuelve true si exit 0.
+function runE2EScript(script, env) {
+    return new Promise((resolve) => {
+        const proc = spawn('node', [script], { env: { ...process.env, ...env }, stdio: 'inherit' });
+        proc.on('close', (code) => resolve(code === 0));
+    });
+}
+
+// Espera a que el server HTTP responda en `port`. Devuelve true si levanta, false si timeout.
+function waitForHttp(port) {
+    return new Promise((resolve) => {
+        let tries = 0;
+        const tick = () => {
+            const r = require('http').get(`http://localhost:${port}/`, (res) => { res.resume(); resolve(true); });
+            r.on('error', () => { if (++tries > 80) resolve(false); else setTimeout(tick, 250); });
+        };
+        tick();
+    });
+}
+
+function killProc(proc) { try { proc.kill('SIGTERM'); } catch (e) { /* ya muerto */ } }
+
+// Suite E2E HTTP contra el server en vivo. Devuelve bool (todas verdes).
+// - e2e-actions.js y e2e-prs.js NO son self-contained: arrancamos un server en background
+//   en BG_PORT, los corremos contra el y lo matamos (siempre, en finally).
+// - e2e-postal*.js SI son self-contained (spawn+kill su propio server): los corremos
+//   cada uno en su puerto propio, secuencial, sin server externo.
+async function runE2EHttpSuite() {
+    console.log(`\n\x1b[1m\x1b[35m========================================================\x1b[0m`);
+    console.log(`\x1b[1m\x1b[35m▶ EJECUTANDO SUITE: E2E HTTP (server en vivo)\x1b[0m`);
+    console.log(`\x1b[1m\x1b[35m========================================================\x1b[0m\n`);
+
+    const results = {};
+
+    // --- Grupo A: e2e que requieren server externo (no self-contained) ---
+    const BG_PORT = '8030';
+    const bg = spawn(process.execPath, ['index.js'], { env: { ...process.env, PORT: BG_PORT }, stdio: 'ignore' });
+    const ready = await waitForHttp(BG_PORT);
+    if (!ready) {
+        console.log(`\x1b[31m✗ server e2e no arranco en ${BG_PORT}\x1b[0m`);
+        killProc(bg);
+        return false;
+    }
+    try {
+        results['e2e-actions.js'] = await runE2EScript('e2e-actions.js', { E2E_PORT: BG_PORT });
+        results['e2e-prs.js'] = await runE2EScript('e2e-prs.js', { E2E_PORT: BG_PORT });
+    } finally {
+        killProc(bg);
+        await new Promise((r) => setTimeout(r, 500)); // darle un instante a liberar el puerto
+    }
+
+    // --- Grupo B: e2e self-contained (spawnean su propio server en puerto propio) ---
+    const selfContained = [
+        ['e2e-postal.js', '8031'],
+        ['e2e-postal-prs-actions.js', '8032'],
+        ['e2e-postal-identity.js', '8033'],
+        ['e2e-postal-revocation.js', '8034'],
+    ];
+    for (const [script, port] of selfContained) {
+        results[script] = await runE2EScript(script, { E2E_PORT: port });
+    }
+
+    let allGreen = true;
+    for (const [name, ok] of Object.entries(results)) {
+        console.log(`${ok ? '🟢' : '🔴'} E2E ${name}: ${ok ? '\x1b[32m✓ PASSED\x1b[0m' : '\x1b[31m✗ FAILED\x1b[0m'}`);
+        if (!ok) allGreen = false;
+    }
+    return allGreen;
+}
+
 async function start() {
     console.log(`\n\x1b[1m\x1b[36m🚀 INICIANDO BATERÍA DE PRUEBAS COMPLETAS (FASTAPI VANILLA HÍBRIDO) 🚀\x1b[0m`);
     
@@ -62,9 +132,89 @@ async function start() {
         'ccdd/validation/test_validate.js',
         'ccdd/serialize/test_serialize.js',
         'ccdd/coerce/test_coerce.js',
+        'ccdd/flat-array-coercer/test_flat_array_coercer.js',
         'ccdd/validation/test_pipeline.js',
         'ccdd/validation/test_pipeline_edge.js',
     ]);
+
+    // 4b. Suite CCDD de la alternativa-local-a-GitHub (repos + issues + actions + pulls), gateada por contrato.
+    const localGithubSuccess = await runNodeTest('LOCAL GITHUB — repos+issues+actions+pulls (CCDD GATE)', [
+        'ccdd/repo-sanitize-name/test_sanitize_name.js',
+        'ccdd/repo-parse-branches/test_parse_branches.js',
+        'ccdd/repo-parse-last-commit/test_parse_last_commit.js',
+        'ccdd/repo-create-bare/test_create_bare_repo.js',
+        'ccdd/repo-list/test_list_repos.js',
+        'ccdd/repo-delete/test_delete_repo.js',
+        'ccdd/repo-info/test_get_repo_info.js',
+        'ccdd/issue-create/test_issue_create.js',
+        'ccdd/issue-list/test_issue_list.js',
+        'ccdd/issue-get/test_issue_get.js',
+        'ccdd/issue-update/test_issue_update.js',
+        'ccdd/issue-state/test_issue_state.js',
+        'ccdd/issue-comment-add/test_issue_comment_add.js',
+        'ccdd/issue-comment-list/test_issue_comment_list.js',
+        'ccdd/action-validate-workflow/test_validate_workflow.js',
+        'ccdd/action-save-workflow/test_save_workflow.js',
+        'ccdd/action-list-workflows/test_list_workflows.js',
+        'ccdd/action-select-by-event/test_select_by_event.js',
+        'ccdd/action-run-step/test_run_step.js',
+        'ccdd/action-run-workflow/test_run_workflow.js',
+        'ccdd/action-dispatch-workflow/test_dispatch_workflow.js',
+        'ccdd/action-dispatch-event/test_dispatch_event.js',
+        'ccdd/action-list-runs/test_list_runs.js',
+        'ccdd/action-get-run/test_get_run.js',
+        'ccdd/pr-sanitize-branch/test_sanitize_branch.js',
+        'ccdd/pr-parse-commits/test_parse_commits.js',
+        'ccdd/pr-parse-diff-stat/test_parse_diff_stat.js',
+        'ccdd/pr-validate-pull-data/test_validate_pull_data.js',
+        'ccdd/pr-validate-branches/test_pr_validate_branches.js',
+        'ccdd/pr-create/test_pr_create.js',
+        'ccdd/pr-list/test_pr_list.js',
+        'ccdd/pr-get/test_pr_get.js',
+        'ccdd/pr-state/test_pr_state.js',
+        'ccdd/pr-comment-add/test_pr_comment_add.js',
+        'ccdd/pr-comment-list/test_pr_comment_list.js',
+        'ccdd/pr-commits/test_pr_commits.js',
+        'ccdd/pr-diff-stat/test_pr_diff_stat.js',
+        'ccdd/pr-merge-branches/test_pr_merge_branches.js',
+        'ccdd/pr-merge/test_pr_merge.js',
+    ]);
+
+    // 4c. Suite CCDD de la capa POSTAL (memoria de proyecto / interaccion entre agentes), gateada por contrato.
+    const postalSuccess = await runNodeTest('POSTAL — event log + projector (CCDD GATE)', [
+        'ccdd/postal-canonical/test_canonical.js',
+        'ccdd/postal-event-hash/test_event_hash.js',
+        'ccdd/postal-make-event-id/test_make_event_id.js',
+        'ccdd/postal-event-file-path/test_event_file_path.js',
+        'ccdd/postal-validate-event-input/test_validate_event_input.js',
+        'ccdd/postal-read-chain-tip/test_read_chain_tip.js',
+        'ccdd/postal-append-event/test_append_event.js',
+        'ccdd/postal-list-events/test_list_events.js',
+        'ccdd/postal-verify-author-chain/test_verify_author_chain.js',
+        'ccdd/postal-verify-chains/test_verify_chains.js',
+        'ccdd/postal-apply-body/test_apply_body.js',
+        'ccdd/postal-fold-event/test_fold_event.js',
+        'ccdd/postal-build-timeline/test_build_timeline.js',
+        'ccdd/postal-replay-events/test_replay_events.js',
+        'ccdd/postal-derive-agent-id/test_derive_agent_id.js',
+        'ccdd/postal-verify-event-signature/test_verify_event_signature.js',
+        'ccdd/postal-register-identity/test_register_identity.js',
+        'ccdd/postal-verify-event-provenance/test_verify_event_provenance.js',
+        'ccdd/postal-apply-rotation/test_apply_rotation.js',
+        'ccdd/postal-apply-revocation/test_apply_revocation.js',
+        'ccdd/postal-resolve-active-key-at/test_resolve_active_key_at.js',
+        'ccdd/postal-verify-temporal-key/test_verify_temporal_key.js',
+        'ccdd/postal-fold-identity-events/test_fold_identity_events.js',
+        'ccdd/postal-build-key-ledger/test_build_key_ledger.js',
+        'ccdd/postal-verify-temporal-provenance/test_verify_temporal_provenance.js',
+        'ccdd/postal-verify-group-temporal-provenance/test_verify_group_temporal_provenance.js',
+        'ccdd/postal-sort-events/test_sort_events.js',
+    ]);
+
+    // 4d. Suite E2E HTTP (server en vivo): arranca el server en background, corre los
+    // e2e-*.js contra el y lo apaga. Regresion postal: events unsigned de autor no
+    // registrado (ej. issue.created from:'system') deben admitirse (anonimo-legacy).
+    const e2eHttpSuccess = await runE2EHttpSuite();
 
     // 5. Imprimir reporte consolidado
     console.log('\n\x1b[1m\x1b[36m========================================================\x1b[0m');
@@ -90,9 +240,21 @@ async function start() {
     }
 
     if (validationSuccess) {
-        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (34/34 pruebas exitosas)\x1b[0m`);
+        console.log(`🟢 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[32m✓ PASSED (42/42 pruebas exitosas)\x1b[0m`);
     } else {
         console.log(`🔴 \x1b[1mSuite Validación CCDD (validation.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
+    if (localGithubSuccess) {
+        console.log(`🟢 \x1b[1mSuite Local GitHub CCDD (repos+issues+actions+pulls)\x1b[0m: \x1b[32m✓ PASSED\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Local GitHub CCDD (repos+issues+actions+pulls)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
+    if (postalSuccess) {
+        console.log(`🟢 \x1b[1mSuite Postal CCDD (event log + projector)\x1b[0m: \x1b[32m✓ PASSED\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Postal CCDD (event log + projector)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
     if (docStoreSuccess) {
@@ -131,9 +293,15 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (e2eHttpSuccess) {
+        console.log(`🟢 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[32m✓ PASSED (6/6 e2e verde)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && mcpGuardSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && mcpGuardSuccess && e2eHttpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);

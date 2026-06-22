@@ -140,6 +140,35 @@ function undisciplinedU(s) {
     return props.filter((p) => !req.has(p)).length; // sin combinadores raíz, disciplined ≈ ∅
 }
 
+// ---- x-variant-of (exención AACS §3.5 para familias reales indistinguibles) ----------
+// x-variant-of vive en inputSchema como string o array de ids de tools hermanas.
+// Un par (a,b) se exime del J_shape SOLO si la declaración es MUTUA: a lista a b.id y b lista a a.id.
+function variantOf(tool) {
+    const v = tool && tool.inputSchema && tool.inputSchema['x-variant-of'];
+    if (typeof v === 'string') return [v];
+    if (Array.isArray(v)) return v.filter((x) => typeof x === 'string');
+    return [];
+}
+function isVariantExempt(a, b) {
+    const va = variantOf(a);
+    const vb = variantOf(b);
+    return va.includes(b.id) && vb.includes(a.id);
+}
+
+// J_shape sobre el set completo de fingerprints de cada tool. Devuelve los pares (a~b) con
+// árbol de tipos idéntico (> JS_ERROR), EXCEPTO los eximidos por x-variant-of mutuo.
+function jShapePairs(tools) {
+    const fps = tools.map((t) => allFingerprints(buildTree(t.inputSchema)));
+    const pairs = [];
+    for (let i = 0; i < tools.length; i++) {
+        for (let j = i + 1; j < tools.length; j++) {
+            if (isVariantExempt(tools[i], tools[j])) continue;
+            if (jShape(fps[i], fps[j]) > JS_ERROR) pairs.push(`${tools[i].id}~${tools[j].id}`);
+        }
+    }
+    return pairs;
+}
+
 // ---- gate ----------------------------------------------------------------------------
 function gate(tools) {
     const findings = [];
@@ -147,11 +176,7 @@ function gate(tools) {
     if (tools.length > TC_ERROR) findings.push({ rule: 'tool-count', sev: 'ERROR', msg: `${tools.length} > 20` });
     const ratio = tools.length / Math.max(1, entities.size);
     if (ratio > ER_ERROR) findings.push({ rule: 'entity-ratio', sev: 'ERROR', msg: ratio.toFixed(2) });
-    const fps = tools.map((t) => allFingerprints(buildTree(t.inputSchema)));
-    const pairs = [];
-    for (let i = 0; i < tools.length; i++) for (let j = i + 1; j < tools.length; j++) {
-        if (jShape(fps[i], fps[j]) > JS_ERROR) pairs.push(`${tools[i].id}~${tools[j].id}`);
-    }
+    const pairs = jShapePairs(tools);
     if (pairs.length) findings.push({ rule: 'j-shape', sev: 'ERROR', msg: `${pairs.length} pares idénticos`, pairs });
     const undisc = tools.filter((t) => undisciplinedU(t.inputSchema) > U_ERROR).map((t) => t.id);
     if (undisc.length) findings.push({ rule: 'undisciplined', sev: 'ERROR', msg: `${undisc.length} tools`, tools: undisc });
@@ -159,7 +184,7 @@ function gate(tools) {
     return { verdict, tools: tools.length, entities: entities.size, findings };
 }
 
-module.exports = { gate, toolsFromOpenAPI, buildTree, allFingerprints, jShape };
+module.exports = { gate, toolsFromOpenAPI, buildTree, allFingerprints, jShape, jShapePairs, isVariantExempt, variantOf };
 
 // CLI: node aacs-lite.js openapi.json
 if (require.main === module) {
