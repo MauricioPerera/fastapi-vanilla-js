@@ -27,6 +27,76 @@ function runNodeTest(name, files) {
     });
 }
 
+// Corre un script e2e-*.js con env adicional (ej: E2E_PORT). Devuelve true si exit 0.
+function runE2EScript(script, env) {
+    return new Promise((resolve) => {
+        const proc = spawn('node', [script], { env: { ...process.env, ...env }, stdio: 'inherit' });
+        proc.on('close', (code) => resolve(code === 0));
+    });
+}
+
+// Espera a que el server HTTP responda en `port`. Devuelve true si levanta, false si timeout.
+function waitForHttp(port) {
+    return new Promise((resolve) => {
+        let tries = 0;
+        const tick = () => {
+            const r = require('http').get(`http://localhost:${port}/`, (res) => { res.resume(); resolve(true); });
+            r.on('error', () => { if (++tries > 80) resolve(false); else setTimeout(tick, 250); });
+        };
+        tick();
+    });
+}
+
+function killProc(proc) { try { proc.kill('SIGTERM'); } catch (e) { /* ya muerto */ } }
+
+// Suite E2E HTTP contra el server en vivo. Devuelve bool (todas verdes).
+// - e2e-actions.js y e2e-prs.js NO son self-contained: arrancamos un server en background
+//   en BG_PORT, los corremos contra el y lo matamos (siempre, en finally).
+// - e2e-postal*.js SI son self-contained (spawn+kill su propio server): los corremos
+//   cada uno en su puerto propio, secuencial, sin server externo.
+async function runE2EHttpSuite() {
+    console.log(`\n\x1b[1m\x1b[35m========================================================\x1b[0m`);
+    console.log(`\x1b[1m\x1b[35m▶ EJECUTANDO SUITE: E2E HTTP (server en vivo)\x1b[0m`);
+    console.log(`\x1b[1m\x1b[35m========================================================\x1b[0m\n`);
+
+    const results = {};
+
+    // --- Grupo A: e2e que requieren server externo (no self-contained) ---
+    const BG_PORT = '8030';
+    const bg = spawn(process.execPath, ['index.js'], { env: { ...process.env, PORT: BG_PORT }, stdio: 'ignore' });
+    const ready = await waitForHttp(BG_PORT);
+    if (!ready) {
+        console.log(`\x1b[31m✗ server e2e no arranco en ${BG_PORT}\x1b[0m`);
+        killProc(bg);
+        return false;
+    }
+    try {
+        results['e2e-actions.js'] = await runE2EScript('e2e-actions.js', { E2E_PORT: BG_PORT });
+        results['e2e-prs.js'] = await runE2EScript('e2e-prs.js', { E2E_PORT: BG_PORT });
+    } finally {
+        killProc(bg);
+        await new Promise((r) => setTimeout(r, 500)); // darle un instante a liberar el puerto
+    }
+
+    // --- Grupo B: e2e self-contained (spawnean su propio server en puerto propio) ---
+    const selfContained = [
+        ['e2e-postal.js', '8031'],
+        ['e2e-postal-prs-actions.js', '8032'],
+        ['e2e-postal-identity.js', '8033'],
+        ['e2e-postal-revocation.js', '8034'],
+    ];
+    for (const [script, port] of selfContained) {
+        results[script] = await runE2EScript(script, { E2E_PORT: port });
+    }
+
+    let allGreen = true;
+    for (const [name, ok] of Object.entries(results)) {
+        console.log(`${ok ? '🟢' : '🔴'} E2E ${name}: ${ok ? '\x1b[32m✓ PASSED\x1b[0m' : '\x1b[31m✗ FAILED\x1b[0m'}`);
+        if (!ok) allGreen = false;
+    }
+    return allGreen;
+}
+
 async function start() {
     console.log(`\n\x1b[1m\x1b[36m🚀 INICIANDO BATERÍA DE PRUEBAS COMPLETAS (FASTAPI VANILLA HÍBRIDO) 🚀\x1b[0m`);
     
@@ -140,6 +210,11 @@ async function start() {
         'ccdd/postal-verify-group-temporal-provenance/test_verify_group_temporal_provenance.js',
     ]);
 
+    // 4d. Suite E2E HTTP (server en vivo): arranca el server en background, corre los
+    // e2e-*.js contra el y lo apaga. Regresion postal: events unsigned de autor no
+    // registrado (ej. issue.created from:'system') deben admitirse (anonimo-legacy).
+    const e2eHttpSuccess = await runE2EHttpSuite();
+
     // 5. Imprimir reporte consolidado
     console.log('\n\x1b[1m\x1b[36m========================================================\x1b[0m');
     console.log(`\x1b[1m\x1b[36m📊 REPORTE DE RESULTADOS CONSOLIDADOS\x1b[0m`);
@@ -217,9 +292,15 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (e2eHttpSuccess) {
+        console.log(`🟢 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[32m✓ PASSED (6/6 e2e verde)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && mcpGuardSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && mcpGuardSuccess && e2eHttpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);

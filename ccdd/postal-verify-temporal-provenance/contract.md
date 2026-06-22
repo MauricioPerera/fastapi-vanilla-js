@@ -24,7 +24,7 @@ autor Y esa clave estaba activa en ev.created_at.
 - Funciones disponibles en el modulo (USARLAS, no re-implementar): verifyEventSignature(ev, publicJwk) -> Promise<bool>, verifyTemporalKey(keyEntry, createdAt) -> string[], hasSig(ev) -> bool.
 - Algoritmo:
   1. si !keyLedger -> return [] (legacy: sin registro, solo cadena).
-  2. keyState = keyLedger.get(ev.from); si !keyState -> return ['unknown-author'].
+  2. keyState = keyLedger.get(ev.from); si !keyState -> return hasSig(ev) ? ['unknown-author'] : [] (anonimo-legacy: autor no registrado SIN firma se admite, compat iter 3 provenance).
   3. si !hasSig(ev) -> return ['unsigned-registered-author'].
   4. signer = null; for k of keyState.keys: si await verifyEventSignature(ev, k.publicJwk) === true -> signer = k; break.
   5. si !signer -> return ['bad-signature'].
@@ -34,8 +34,9 @@ autor Y esa clave estaba activa en ev.created_at.
 
 ## Examples
 - verifyTemporalProvenance(ev, null) -> [].
+- verifyTemporalProvenance(evSinFirmaDeAutorNoRegistrado, ledger) -> [] (anonimo-legacy admitido).
 - verifyTemporalProvenance(evSinFirma, ledgerConAutor) -> ['unsigned-registered-author'].
-- verifyTemporalProvenance(evDeAutorNoRegistrado, ledger) -> ['unknown-author'].
+- verifyTemporalProvenance(evFirmadoDeAutorNoRegistrado, ledger) -> ['unknown-author'].
 - verifyTemporalProvenance(evFirmaInvalida, ledger) -> ['bad-signature'].
 - verifyTemporalProvenance(evFirmadoPorClaveActiva, ledger) -> [].
 - verifyTemporalProvenance(evFirmadoPorClaveRotada_tDespues, ledger) -> ['stale-key'].
@@ -46,9 +47,11 @@ autor Y esa clave estaba activa en ev.created_at.
 - DO: cortar al primer firmante valido.
 - DON'T: re-implementar firma ni ventana temporal.
 - DON'T: mutar inputs.
+- DON'T: marcar unknown-author a un evento SIN firma de autor no registrado (anonimo-legacy se admite).
 
 ## Tests
-Property-tests con cripto real: sin ledger -> []; autor no registrado -> unknown-author;
+Property-tests con cripto real: sin ledger -> []; autor no registrado SIN firma -> []
+(anonimo-legacy, ledger presente); autor no registrado CON firma -> unknown-author;
 sin firma registrado -> unsigned-registered-author; firma invalida -> bad-signature;
 clave activa en ventana -> []; clave rotada y t>superseded_at -> stale-key; clave
 revocada y t>revoked_at -> revoked-key; clave vieja firmada ANTES de la rotacion -> [];

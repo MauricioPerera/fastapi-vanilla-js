@@ -57,6 +57,31 @@ test('autor no registrado -> unknown-author', async () => {
     assert.deepStrictEqual(await verifyTemporalProvenance(ev, ledger), ['unknown-author']);
 });
 
+test('autor no registrado SIN firma -> [] (anonimo-legacy admitido, ledger presente)', async () => {
+    // REGRESION: un evento unsigned de autor desconocido (ej. issue.created from:'system')
+    // debe ADMITIRSE con reasons [] para mantener compat hacia atras (iter 3 provenance).
+    const g = await genKp();
+    const ev = {
+        v: 1, kind: 'issue.created', from: 'system', to: [],
+        created_at: T0, id: 'system_1', seq: 1, prev: null,
+        body: { number: 1, title: 'Bug', state: 'open' }, sig: null
+    };
+    const ledger = new Map([['a', keyState([entry(g.publicKeyJwk, T0)])]]);
+    assert.deepStrictEqual(await verifyTemporalProvenance(ev, ledger), []);
+});
+
+test('autor no registrado SIN firma sobre ledger vacio -> [] (repo sin identidades)', async () => {
+    // REGRESION: repo recien creado sin identidades registradas -> ledger vacio.
+    // Evento system unsigned debe seguir admitido (timeline no vacio).
+    const ev = {
+        v: 1, kind: 'issue.created', from: 'system', to: [],
+        created_at: T0, id: 'system_1', seq: 1, prev: null,
+        body: { number: 1, title: 'Bug', state: 'open' }, sig: null
+    };
+    const ledger = new Map();
+    assert.deepStrictEqual(await verifyTemporalProvenance(ev, ledger), []);
+});
+
 test('sin firma y registrado -> unsigned-registered-author', async () => {
     const g = await genKp();
     const ev = { v: 1, kind: 'agent.message', from: 'a', to: [], created_at: T0, id: 'a_1', seq: 1, prev: null, body: { text: 'hola' }, sig: null };
