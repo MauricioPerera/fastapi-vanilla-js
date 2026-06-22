@@ -208,6 +208,7 @@ async function start() {
         'ccdd/postal-build-key-ledger/test_build_key_ledger.js',
         'ccdd/postal-verify-temporal-provenance/test_verify_temporal_provenance.js',
         'ccdd/postal-verify-group-temporal-provenance/test_verify_group_temporal_provenance.js',
+        'ccdd/postal-sort-events/test_sort_events.js',
     ]);
 
     // 4d. Suite E2E HTTP (server en vivo): arranca el server en background, corre los
