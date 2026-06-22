@@ -27,13 +27,17 @@ const {
     PostalError
 } = require('../lib/postal');
 const { RepoError } = require('../lib/gitRepos');
+const { getCurrentUser } = require('../dependencies/auth');
 
 const EVENTS_DIR = path.join(__dirname, '..', '.data', 'events');
 const IDENTITIES_DIR = path.join(__dirname, '..', '.data', 'identities');
 
+// HARDENING: todo endpoint (GET + escritura) exige token Bearer via getCurrentUser.
+// Reusa dependencies/auth.js (mismo patron que routers/items.js). Sin token -> 401.
 const postalRouter = new APIRouter({
     prefix: '/repos',
-    tags: ['Postal']
+    tags: ['Postal'],
+    dependencies: { user: getCurrentUser }
 });
 
 // Helper: mapea PostalError/RepoError a respuesta REST con el status adecuado.

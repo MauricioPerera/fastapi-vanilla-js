@@ -124,6 +124,9 @@ async function start() {
     // 3f. Suite del transporte SSE de FastMCP
     const sseSuccess = await runNodeTest('FastMCP SSE (transporte de red)', ['test-sse.js']);
 
+    // 3f-bis. Hardening de auth sobre la superficie SSE (sin/con token + error inesperado -> 500)
+    const sseAuthSuccess = await runNodeTest('FastMCP SSE AUTH HARDENING (401/200/500)', ['test-sse-auth.js']);
+
     // 3g. Suite de controles de seguridad/coste del MCP edge (auth, rate-limit, cap, kill switch)
     const mcpGuardSuccess = await runNodeTest('MCP EDGE GUARD (auth + rate-limit + cap)', ['test-mcp-edge-guard.js']);
 
@@ -287,6 +290,12 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite FastMCP SSE (test-sse.js)\x1b[0m       : \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (sseAuthSuccess) {
+        console.log(`🟢 \x1b[1mSuite SSE AUTH HARDENING (test-sse-auth.js)\x1b[0m: \x1b[32m✓ PASSED\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite SSE AUTH HARDENING (test-sse-auth.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     if (mcpGuardSuccess) {
         console.log(`🟢 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[32m✓ PASSED (13/13 pruebas exitosas)\x1b[0m`);
     } else {
@@ -301,7 +310,7 @@ async function start() {
 
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && mcpGuardSuccess && e2eHttpSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && sseAuthSuccess && mcpGuardSuccess && e2eHttpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);
