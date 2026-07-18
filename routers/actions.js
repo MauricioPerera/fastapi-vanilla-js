@@ -11,7 +11,7 @@ const {
 } = require('../lib/actions');
 const { RepoError } = require('../lib/gitRepos');
 const { appendEvent } = require('../lib/postal');
-const { getCurrentUser } = require('../dependencies/auth');
+const { getCurrentUser, requireAdmin } = require('../dependencies/auth');
 
 // Directorios base (.data/ ya está en .gitignore). Mismo REPOS_DIR que routers/repos.js
 // para resolver el cwd donde se ejecutan los steps (el repo bare).
@@ -96,7 +96,8 @@ actionsRouter.post('/:name/workflows', async (req, res) => {
         name: { type: 'string', required: true },
         trigger: { type: 'string', required: true },
         steps: { type: 'array', required: true }
-    }
+    },
+    dependencies: { user: requireAdmin }
 });
 
 // Listar workflows de un repo (GET /repos/:name/workflows)
@@ -133,7 +134,8 @@ actionsRouter.post('/:name/workflows/:wf/dispatch', async (req, res) => {
     }
 }, {
     summary: 'Disparar (dispatch) un workflow',
-    description: 'Ejecuta el workflow indicado y persiste el run. Body opcional: { event } (default: manual). Los steps se ejecutan en el cwd del repo (shell arbitrario, ejecución local de confianza).'
+    description: 'Ejecuta el workflow indicado y persiste el run. Body opcional: { event } (default: manual). Los steps se ejecutan en el cwd del repo (shell arbitrario, ejecución local de confianza).',
+    dependencies: { user: requireAdmin }
 });
 
 // Listar runs de un repo (GET /repos/:name/runs)

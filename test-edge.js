@@ -457,6 +457,42 @@ test('FastAPI Edge (Cloudflare Workers) Integration Suite', async (t) => {
         assert.strictEqual(body.resultados[0].id, "doc-ai-1");
         assert.strictEqual(body.resultados[0].metadata.text, "Hola Mundo desde Cloudflare Workers AI");
     });
+
+    // Test 19: Gate ALLOW_DEV_BYPASS - debug-schemas sin bypass -> 403
+    await t.test('GET /auth/debug-schemas - 403 Forbidden si env SIN ALLOW_DEV_BYPASS', async () => {
+        const noBypassEnv = { ...env };
+        delete noBypassEnv.ALLOW_DEV_BYPASS;
+        const req = new Request('http://localhost/auth/debug-schemas');
+        const res = await worker.fetch(req, noBypassEnv, ctx);
+        assert.strictEqual(res.status, 403);
+        const body = await res.json();
+        assert.strictEqual(body.detail, "Forbidden");
+    });
+
+    // Test 20: Gate ALLOW_DEV_BYPASS - debug-env sin bypass -> 403
+    await t.test('GET /auth/debug-env - 403 Forbidden si env SIN ALLOW_DEV_BYPASS', async () => {
+        const noBypassEnv = { ...env };
+        delete noBypassEnv.ALLOW_DEV_BYPASS;
+        const req = new Request('http://localhost/auth/debug-env');
+        const res = await worker.fetch(req, noBypassEnv, ctx);
+        assert.strictEqual(res.status, 403);
+        const body = await res.json();
+        assert.strictEqual(body.detail, "Forbidden");
+    });
+
+    // Test 21: Gate ALLOW_DEV_BYPASS - debug-schemas con bypass -> 200
+    await t.test('GET /auth/debug-schemas - 200 con ALLOW_DEV_BYPASS=1 (comportamiento intacto)', async () => {
+        const req = new Request('http://localhost/auth/debug-schemas');
+        const res = await worker.fetch(req, env, ctx);
+        assert.strictEqual(res.status, 200);
+    });
+
+    // Test 22: Gate ALLOW_DEV_BYPASS - debug-env con bypass -> 200
+    await t.test('GET /auth/debug-env - 200 con ALLOW_DEV_BYPASS=1 (comportamiento intacto)', async () => {
+        const req = new Request('http://localhost/auth/debug-env');
+        const res = await worker.fetch(req, env, ctx);
+        assert.strictEqual(res.status, 200);
+    });
 });
 
 

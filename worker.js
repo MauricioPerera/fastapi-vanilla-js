@@ -1131,6 +1131,7 @@ app.post('/auth/login', async (request, env, ctx) => {
 });
 
 app.get('/auth/debug-schemas', async (request, env) => {
+    if (!(env && env.ALLOW_DEV_BYPASS === '1')) return new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     ensureDbAndAuth(env);
     await ensureAuthInit(env);
     let schemas = [];
@@ -1150,6 +1151,7 @@ app.get('/auth/debug-schemas', async (request, env) => {
 });
 
 app.get('/auth/debug-env', (request, env) => {
+    if (!(env && env.ALLOW_DEV_BYPASS === '1')) return new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     return {
         keys: env ? Object.keys(env) : [],
         hasMyKv: !!(env && env.MY_KV),

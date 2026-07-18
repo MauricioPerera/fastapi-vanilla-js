@@ -130,6 +130,14 @@ async function start() {
     // 3g. Suite de controles de seguridad/coste del MCP edge (auth, rate-limit, cap, kill switch)
     const mcpGuardSuccess = await runNodeTest('MCP EDGE GUARD (auth + rate-limit + cap)', ['test-mcp-edge-guard.js']);
 
+    // 3h. RBAC admin-only sobre actions (REST): definir/disparar workflow exige rol admin.
+    // Corre en su propio proceso (separado del 3h-bis) porque ambos comparten .data/_users.docs.json
+    // y node --test paraleliza archivos dentro de una misma invocación.
+    const actionsAuthzSuccess = await runNodeTest('ACTIONS AUTHZ REST (requireAdmin)', ['test-actions-authz.js']);
+
+    // 3h-bis. RBAC admin-only sobre actions (MCP): actions_upsert/actions_dispatch exigen rol admin.
+    const mcpActionsAuthzSuccess = await runNodeTest('ACTIONS AUTHZ MCP (requiresAdmin)', ['test-mcp-actions-authz.js']);
+
     // 4. Ejecutar Suite de Validación tipada + response_model (verificada con gate CCDD)
     const validationSuccess = await runNodeTest('VALIDATION + response_model (CCDD GATE + pipeline)', [
         'ccdd/validation/test_validate.js',
@@ -302,6 +310,18 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite MCP Edge Guard (test-mcp-edge-guard.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (actionsAuthzSuccess) {
+        console.log(`🟢 \x1b[1mSuite Actions AuthZ REST (test-actions-authz.js)\x1b[0m: \x1b[32m✓ PASSED (6/6 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Actions AuthZ REST (test-actions-authz.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
+    if (mcpActionsAuthzSuccess) {
+        console.log(`🟢 \x1b[1mSuite Actions AuthZ MCP (test-mcp-actions-authz.js)\x1b[0m: \x1b[32m✓ PASSED (4/4 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Actions AuthZ MCP (test-mcp-actions-authz.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     if (e2eHttpSuccess) {
         console.log(`🟢 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[32m✓ PASSED (6/6 e2e verde)\x1b[0m`);
     } else {
@@ -310,7 +330,7 @@ async function start() {
 
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && sseAuthSuccess && mcpGuardSuccess && e2eHttpSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && sseAuthSuccess && mcpGuardSuccess && actionsAuthzSuccess && mcpActionsAuthzSuccess && e2eHttpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);

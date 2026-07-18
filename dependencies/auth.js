@@ -111,5 +111,6 @@ module.exports = {
     ensureAuthInit,
     getCurrentUser,
     requireAdmin,
+    _isAdmin,
     UnauthorizedError
 };
