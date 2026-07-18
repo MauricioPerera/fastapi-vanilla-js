@@ -138,6 +138,12 @@ async function start() {
     // 3h-bis. RBAC admin-only sobre actions (MCP): actions_upsert/actions_dispatch exigen rol admin.
     const mcpActionsAuthzSuccess = await runNodeTest('ACTIONS AUTHZ MCP (requiresAdmin)', ['test-mcp-actions-authz.js']);
 
+    // 3i. Límite de body (413) + rate-limiter opt-in (lib/fastapi.js, lib/rate-limit.js).
+    const fastapiLimitsSuccess = await runNodeTest('FASTAPI LIMITS (body 413 + rate-limit opt-in)', ['test-fastapi-limits.js']);
+
+    // 3j. Observabilidad: GET /health (check real de db) + logging estructurado opt-in (LOG_FORMAT=json).
+    const observabilitySuccess = await runNodeTest('OBSERVABILITY (health check + structured logging)', ['test-observability.js']);
+
     // 4. Ejecutar Suite de Validación tipada + response_model (verificada con gate CCDD)
     const validationSuccess = await runNodeTest('VALIDATION + response_model (CCDD GATE + pipeline)', [
         'ccdd/validation/test_validate.js',
@@ -322,6 +328,18 @@ async function start() {
         console.log(`🔴 \x1b[1mSuite Actions AuthZ MCP (test-mcp-actions-authz.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
     }
 
+    if (fastapiLimitsSuccess) {
+        console.log(`🟢 \x1b[1mSuite FastAPI Limits (test-fastapi-limits.js)\x1b[0m: \x1b[32m✓ PASSED (4/4 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite FastAPI Limits (test-fastapi-limits.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
+    if (observabilitySuccess) {
+        console.log(`🟢 \x1b[1mSuite Observability (test-observability.js)\x1b[0m: \x1b[32m✓ PASSED (6/6 pruebas exitosas)\x1b[0m`);
+    } else {
+        console.log(`🔴 \x1b[1mSuite Observability (test-observability.js)\x1b[0m: \x1b[31m✗ FAILED (revisar logs superiores)\x1b[0m`);
+    }
+
     if (e2eHttpSuccess) {
         console.log(`🟢 \x1b[1mSuite E2E HTTP (server en vivo)\x1b[0m     : \x1b[32m✓ PASSED (6/6 e2e verde)\x1b[0m`);
     } else {
@@ -330,7 +348,7 @@ async function start() {
 
     console.log('\x1b[1m\x1b[36m--------------------------------------------------------\x1b[0m');
 
-    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && sseAuthSuccess && mcpGuardSuccess && actionsAuthzSuccess && mcpActionsAuthzSuccess && e2eHttpSuccess) {
+    if (nodeSuccess && edgeSuccess && mcpSuccess && validationSuccess && localGithubSuccess && postalSuccess && docStoreSuccess && vectorStoreSuccess && mcpFeaturesSuccess && routersSuccess && sseSuccess && sseAuthSuccess && mcpGuardSuccess && actionsAuthzSuccess && mcpActionsAuthzSuccess && fastapiLimitsSuccess && observabilitySuccess && e2eHttpSuccess) {
         console.log(`\n\x1b[1m\x1b[32m🏆 ¡ÉXITO TOTAL DE LA BATERÍA DE PRUEBAS! 🏆\x1b[0m`);
         console.log(`\x1b[32mTodas las APIs, Edge Workers, herramientas y recursos MCP funcionan de forma excelente.\x1b[0m\n`);
         process.exit(0);

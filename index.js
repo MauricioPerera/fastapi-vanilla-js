@@ -13,6 +13,9 @@ const { UnauthorizedError } = require('./dependencies/auth');
 const path = require('path');
 const fs = require('fs');
 
+// Marca de tiempo de arranque del proceso: base para el uptime del health-check.
+const startedAt = Date.now();
+
 // 1. Inicialización de la Aplicación con CORS
 const app = new FastAPI({
     title: "API Modular de Producción Vanilla JS",
@@ -33,7 +36,20 @@ app.addMiddleware(async (req, res, next) => {
     // Redacta el token si vino por query param (fallback SSE de navegador): nunca
     // loguear tokens. Los tokens por header Authorization no aparecen en req.url.
     const safeUrl = req.url.replace(/([?&])token=[^&]*/g, '$1token=<redacted>');
-    console.log(`[${new Date().toISOString()}] \x1b[36m${req.method}\x1b[0m ${safeUrl} - Status: \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+    // LOG_FORMAT=json activa el modo de salida JSON estructurada (una línea por
+    // request, parseable por un colector de logs). SIN esa variable (default que
+    // usan todos los tests), el logging es idéntico al texto coloreado de siempre.
+    if (process.env.LOG_FORMAT === 'json') {
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            method: req.method,
+            path: safeUrl,
+            status: res.statusCode,
+            durationMs: duration
+        }));
+    } else {
+        console.log(`[${new Date().toISOString()}] \x1b[36m${req.method}\x1b[0m ${safeUrl} - Status: \x1b[32m${res.statusCode}\x1b[0m (${duration}ms)`);
+    }
 });
 
 // 3. Manejadores de Excepciones Globales
@@ -183,6 +199,40 @@ app.get('/', (req, res) => {
 }, {
     tags: ["Inicio"],
     summary: "Endpoint de Inicio"
+});
+
+// 5.1 Health Check (público, sin auth — health-check estándar)
+// Devuelve el estado REAL del sistema: uptime, timestamp ISO y un check barato y
+// real de la base de datos (Document Store). Si el check de db falla, responde 503
+// con status "degraded" y el detalle de qué falló, en vez de un 200 mentiroso.
+app.get('/health', (req, res) => {
+    const checks = {};
+    let failed = null;
+    try {
+        const db = require('./dependencies/db');
+        // Operación barata y real: contar docs de una colección del Document Store.
+        // Si el adapter/disco está roto, count() lanza y el check falla (db=false).
+        const n = db.collection('_cpt_schemas').count();
+        checks.db = typeof n === 'number';
+    } catch (err) {
+        checks.db = false;
+        failed = { db: err.message };
+    }
+    const payload = {
+        status: checks.db ? 'ok' : 'degraded',
+        uptime: Math.round((Date.now() - startedAt) / 1000),
+        timestamp: new Date().toISOString(),
+        checks
+    };
+    if (failed) {
+        payload.detail = failed;
+        res.json(payload, 503);
+        return;
+    }
+    return payload;
+}, {
+    tags: ["Salud"],
+    summary: "Health Check del sistema"
 });
 
 // 6. Configuración y Servicio de Carpeta de Archivos Estáticos
